@@ -55,7 +55,7 @@ public function - as defined above - is added, these files must be updated.
 
 To make such an update, please do the following:
 
-    ./Configure -Werror --strict-warnings [your-options]
+    ./Configure --strict-warnings [your-options]
     make update
 
 If you plan to submit the changes you made to OpenSSL (see
