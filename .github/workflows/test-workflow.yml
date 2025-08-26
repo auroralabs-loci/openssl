@@ -1,41 +1,39 @@
-name: Example LOCI Workflow
-
+name: Example Workflow
 on:
   push:
-  workflow_dispatch:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   loci:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout project
+      - name: Prepare environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          echo "Cross compiler installed"
+        shell: bash
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Build binaries
+      - name: Build sample
         run: |
-          cmake -B build
-          make -C build
-
-      - name: LOCI Upload
-        id: loci-upload
-        uses: auroralabs-mkd/loci-action@v1
+          mkdir -p samples/build/bin
+          aarch64-linux-gnu-g++ -o "samples/build/bin/case_01" \
+          samples/case_01/test_01.cpp
+          echo "Successfully compiled samples/case_01"
+        shell: bash
+      - name: Analyze build artifacts
+        uses: auroralabs-loci/loci-dev-action@main
         env:
-          LOCI_BACKEND_URL: ${{ secrets.LOCI_BACKEND_URL }}
-          LOCI_API_KEY: ${{ secrets.LOCI_API_KEY }}
+          LOCI_BACKEND_URL: '${{ secrets.LOCI_BACKEND_URL }}'
+          LOCI_API_KEY: '${{ secrets.LOCI_API_KEY }}'
         with:
-          mode: upload
+          mode: analyze
           binaries: |
-            ./build/bin/app
-            ./build/lib/lib.so
-          project: MyProject
-
-      - name: LOCI Insights
-        uses: auroralabs-mkd/loci-action@v1
-        env:
-          LOCI_BACKEND_URL: ${{ secrets.LOCI_BACKEND_URL }}
-          LOCI_API_KEY: ${{ secrets.LOCI_API_KEY }}
-        with:
-          mode: insights
-          project: MyProject
-          version: ${{ steps.loci-upload.outputs.version }}
+                samples/build/bin/case_01
+          project: DIFF Tests
