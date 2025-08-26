@@ -1,0 +1,41 @@
+name: Example LOCI Workflow
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  loci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build binaries
+        run: |
+          cmake -B build
+          make -C build
+
+      - name: LOCI Upload
+        id: loci-upload
+        uses: auroralabs-mkd/loci-action@v1
+        env:
+          LOCI_BACKEND_URL: ${{ secrets.LOCI_BACKEND_URL }}
+          LOCI_API_KEY: ${{ secrets.LOCI_API_KEY }}
+        with:
+          mode: upload
+          binaries: |
+            ./build/bin/app
+            ./build/lib/lib.so
+          project: MyProject
+
+      - name: LOCI Insights
+        uses: auroralabs-mkd/loci-action@v1
+        env:
+          LOCI_BACKEND_URL: ${{ secrets.LOCI_BACKEND_URL }}
+          LOCI_API_KEY: ${{ secrets.LOCI_API_KEY }}
+        with:
+          mode: insights
+          project: MyProject
+          version: ${{ steps.loci-upload.outputs.version }}
