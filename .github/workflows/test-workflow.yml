@@ -1,8 +1,8 @@
-name: Example Workflow
+name: Example Workflow - Loci
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     types: [opened, synchronize, reopened]
 
