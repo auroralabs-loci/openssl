@@ -631,6 +631,7 @@ static int check_extensions(X509_STORE_CTX *ctx)
         CB_FAIL_IF(!allow_proxy_certs && (x->ex_flags & EXFLAG_PROXY) != 0,
                    ctx, x, i, X509_V_ERR_PROXY_CERTIFICATES_NOT_ALLOWED);
         ret = X509_check_ca(x);
+
         switch (must_be_ca) {
         case -1:
             CB_FAIL_IF((ctx->param->flags & X509_V_FLAG_X509_STRICT) != 0
@@ -1607,6 +1608,45 @@ static void get_delta_sk(X509_STORE_CTX *ctx, X509_CRL **dcrl, int *pscore,
     *dcrl = NULL;
 }
 
+static int check_crl_idp_indirect(X509_CRL *crl)
+{
+    int rv = 0;
+    int idx = X509_CRL_get_ext_by_NID(crl, NID_issuing_distribution_point, -1);
+
+    if (idx >= 0) {
+        X509_EXTENSION *idp_ext = X509_CRL_get_ext(crl, idx);
+        ISSUING_DIST_POINT *idp;
+
+        if (idp_ext == NULL)
+            return 0;
+        idp = X509V3_EXT_d2i(idp_ext);
+
+        if (idp && idp->indirectCRL == 1)
+            rv = 1;
+        ISSUING_DIST_POINT_free(idp);
+    }
+
+    return rv;
+}
+
+/*
+ * Check if any revoked certificate has a Certificate Issuer extension
+ */
+static int check_crl_certs_issuer_ext(X509_CRL *crl)
+{
+    STACK_OF(X509_REVOKED) *revs = X509_CRL_get_REVOKED(crl);
+
+    if (revs == NULL)
+        return 0;
+    for (int i = 0; i < sk_X509_REVOKED_num(revs); i++) {
+        X509_REVOKED *x = sk_X509_REVOKED_value(revs, i);
+
+        if (X509_REVOKED_get_ext_by_NID(x, NID_certificate_issuer, -1) >= 0)
+            return 1;
+    }
+    return 0;
+}
+
 /*
  * For a given CRL return how suitable it is for the supplied certificate
  * 'x'. The return value is a mask of several criteria. If the issuer is not
@@ -1619,6 +1659,7 @@ static int get_crl_score(X509_STORE_CTX *ctx, X509 **pissuer,
 {
     int crl_score = 0;
     unsigned int tmp_reasons = *preasons, crl_reasons;
+    unsigned int strict = ctx->param->flags & X509_V_FLAG_X509_STRICT;
 
     /* First see if we can reject CRL straight away */
 
@@ -1669,6 +1710,10 @@ static int get_crl_score(X509_STORE_CTX *ctx, X509 **pissuer,
     }
 
     *preasons = tmp_reasons;
+
+    /* Check the Certificate Issuer extensions and IDP in strict mode */
+    if (strict && check_crl_certs_issuer_ext(crl) && !check_crl_idp_indirect(crl))
+        return 0;
 
     return crl_score;
 

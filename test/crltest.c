@@ -270,6 +270,90 @@ static const char **unknown_critical_crls[] = {
     kUnknownCriticalCRL, kUnknownCriticalCRL2
 };
 
+/*
+ * RFC 5280 states that only CRL files with the Indirect CRL flag set to True in
+ * the IDP extension require the certificate_issuer extension.
+ * https://github.com/openssl/openssl/issues/27465
+ */
+
+static const char *kRootCertIssuerNoIDP[] = {
+    "-----BEGIN CERTIFICATE-----\n",
+    "MIID4zCCAsugAwIBAgIUGTcyNat9hTOo8nnGdzF7MTzL9WAwDQYJKoZIhvcNAQEL\n",
+    "BQAweTELMAkGA1UEBhMCVVMxEzARBgNVBAgMCkNhbGlmb3JuaWExFjAUBgNVBAcM\n",
+    "DVNhbiBGcmFuY2lzY28xEzARBgNVBAoMCk15IENvbXBhbnkxEzARBgNVBAMMCk15\n",
+    "IFJvb3QgQ0ExEzARBgNVBAsMCk15IFJvb3QgQ0EwHhcNMjUwMzAzMDcxNDA0WhcN\n",
+    "MzUwMzAxMDcxNDA0WjB5MQswCQYDVQQGEwJVUzETMBEGA1UECAwKQ2FsaWZvcm5p\n",
+    "YTEWMBQGA1UEBwwNU2FuIEZyYW5jaXNjbzETMBEGA1UECgwKTXkgQ29tcGFueTET\n",
+    "MBEGA1UEAwwKTXkgUm9vdCBDQTETMBEGA1UECwwKTXkgUm9vdCBDQTCCASIwDQYJ\n",
+    "KoZIhvcNAQEBBQADggEPADCCAQoCggEBAN6jjwkmV+pse430MQfyaWv+JtAd2r6K\n",
+    "qzEquBcoofzuf/yvdEhQPjK3bcotgfEcFq3QMo1MJ7vqRHEIu0hJ+5ZnEQtIRcrg\n",
+    "Vm7/EoVCBpDc9BDtW40TDp69z9kaKyyKYy6rxmSKgJydGBeGGMwBxgTK/o0xAriC\n",
+    "C3lLXHT8G8YMamKUpToPL5iCRX+GJPnnizB2ODvpQGMWkbp9+1xEc4dD7Db2wfUb\n",
+    "gatDYUoGndQKWD49UhURavQZeLpDxlz93YutRRkZTWc4IB7WebiEb39BDjSP3QYm\n",
+    "2h+rZYyjp3Gxy8pBNTPzE9Dk4yjiqS7o3WGvi/S6zKTLDvWl9t6pMOMCAwEAAaNj\n",
+    "MGEwHQYDVR0OBBYEFNdhiR+Tlot2VBbp5XfcfLdlG4AkMA4GA1UdDwEB/wQEAwIB\n",
+    "hjAfBgNVHSMEGDAWgBTXYYkfk5aLdlQW6eV33Hy3ZRuAJDAPBgNVHRMBAf8EBTAD\n",
+    "AQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCvwutY0WMcKoqulifnYfhxGLtXSSvD2GET\n",
+    "uNRv+S1KI5JKcAdfvnbNDpUwlujMDIpe3ewmv9i6kcitpHwZXdVAw6KWagJ0kDSt\n",
+    "jbArJxuuuFmSFDS7kj8x7FZok5quAWDSSg+ubV2tCVxmDuTs1WXJXD3l9g+3J9GU\n",
+    "kyeFMKqwRp8w22vm9ilgXrzeesAmmAg/pEb56ljTPeaONQxVe7KJhv2q8J17sML8\n",
+    "BE7TdVx7UFQbO/t9XqdT5O9eF8JUx4Vn4QSr+jdjJ/ns4T3/IC9dJq9k7tjD48iA\n",
+    "TNc+7x+uj8P39VA96HpjujVakj8/qn5SQMPJgDds+MSXrX+6JBWm\n",
+    "-----END CERTIFICATE-----\n",
+    NULL
+};
+
+static const char *kCACertIssuerNoIDP[] = {
+    "-----BEGIN CERTIFICATE-----\n",
+    "MIIECjCCAvKgAwIBAgIUPxuMqMtuN1j3XZVRVrNmaTCIP04wDQYJKoZIhvcNAQEL\n",
+    "BQAweTELMAkGA1UEBhMCVVMxEzARBgNVBAgMCkNhbGlmb3JuaWExFjAUBgNVBAcM\n",
+    "DVNhbiBGcmFuY2lzY28xEzARBgNVBAoMCk15IENvbXBhbnkxEzARBgNVBAMMCk15\n",
+    "IFJvb3QgQ0ExEzARBgNVBAsMCk15IFJvb3QgQ0EwHhcNMjUwNDE3MTAxNjQ5WhcN\n",
+    "MjYwNDE3MTAxNjQ5WjBoMQswCQYDVQQGEwJDTjEQMA4GA1UECAwHQmVpamluZzEQ\n",
+    "MA4GA1UEBwwHQmVpamluZzEYMBYGA1UECgwPTXkgT3JnYW5pemF0aW9uMRswGQYD\n",
+    "VQQDDBJNeSBJbnRlcm1lZGlhdGUgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw\n",
+    "ggEKAoIBAQDIxRxZQokflDaLYoD21HT2U4EshqtKpSf9zPS5unBMCfnQkU4IJjBF\n",
+    "3qQmfgz5ZOpZv3x0w48fDjiysk0eOVCFAo+uixEjMeuln6Wj3taetch2Sk0YNm5J\n",
+    "SJCNF2olHZXn5R8ngEmho2j1wbwNnpcccZyRNzUSjR9oAgObkP3O7fyQKJRxwNU0\n",
+    "sN7mfoyEOczKtUaYbqi2gPx6OOqNLjXlLmfZ8PJagKCN/oYkGU5PoRNXp65Znhu6\n",
+    "s8FuSmvTodu8Qhs9Uizo+SycaBXn5Fbqt32S+9vPfhH9FfELDfQIaBp+iQAxcKPX\n",
+    "tUglXEjiEVrbNf722PuWIWN9EIBolULVAgMBAAGjgZowgZcwEgYDVR0TAQH/BAgw\n",
+    "BgEB/wIBATAxBgNVHR8EKjAoMCagJKAihiBodHRwOi8vbG9jYWxob3N0OjgwMDAv\n",
+    "Y2FfY3JsLmRlcjAdBgNVHQ4EFgQUh40vFgoopz5GUggPEEk2+bKgbwQwHwYDVR0j\n",
+    "BBgwFoAU12GJH5OWi3ZUFunld9x8t2UbgCQwDgYDVR0PAQH/BAQDAgGGMA0GCSqG\n",
+    "SIb3DQEBCwUAA4IBAQDANfJuTgo0vRaMPYqOeW8R4jLHdVazdGLeQQ/85vXr/Gl1\n",
+    "aL40tLp4yZbThxuxTzPzfY1OGkG69YQ/8Vo0gCEi5KjBMYPKmZISKy1MwROQ1Jfp\n",
+    "HkmyZk1TfuzG/4fN/bun2gjpDYcihf4xA4NhSVzQyvqm1N6VkTgK+bEWTOGzqw66\n",
+    "6IYPN6oVDmLbwU1EvV3rggB7HUJCJP4qW9DbAQRAijUurPUGoU2vEbrSyYkfQXCf\n",
+    "p4ouOTMl6O7bJ110SKzxbCfWqom+iAwHlU2tOPVmOp1CLDCClMRNHIFMDGAoBomH\n",
+    "s01wD+IcIi9OkQEbqVb/XDKes8fqzQgTtSM9C9Ot\n",
+    "-----END CERTIFICATE-----\n",
+    NULL
+};
+
+static const char *kCRLCertIssuerNoIDP[] = {
+    "-----BEGIN X509 CRL-----\n",
+    "MIIDBDCCAewCAQEwDQYJKoZIhvcNAQELBQAweTELMAkGA1UEBhMCVVMxEzARBgNV\n",
+    "BAgMCkNhbGlmb3JuaWExFjAUBgNVBAcMDVNhbiBGcmFuY2lzY28xEzARBgNVBAoM\n",
+    "Ck15IENvbXBhbnkxEzARBgNVBAMMCk15IFJvb3QgQ0ExEzARBgNVBAsMCk15IFJv\n",
+    "b3QgQ0EXDTI1MDEwMTAwMDAwMFoXDTI1MTIwMTAwMDAwMFowgf8wJQIUHIACLvgf\n",
+    "JAXulqYS3LYf4KxwHl4XDTI1MDQxNzEwMTY1MVowgdUCEQCMuBk+zOZx7AAAAABY\n",
+    "LIp6Fw0yNTAzMDQwMDAwMDBaMIGwMAoGA1UdFQQDCgEEMBgGA1UdGAQRGA8yMDI1\n",
+    "MDMxNDAwMDAwMFowgYcGA1UdHQEB/wR9MHukeTB3MQswCQYDVQQGDAJVTjEPMA0G\n",
+    "A1UECAwGTXkgU1QxMRUwEwYDVQQHDAxNWSBMb2NhbGl0eTExETAPBgNVBAoTCE15\n",
+    "IFVuaXQxMREwDwYDVQQLDAhNeSBVbml0MTEaMBgGA1UEAwwRd3d3Lm15Y29tcGFu\n",
+    "eS5jb22gPTA7MBgGA1UdFAQRAg8Zz//e2nTt8vakRgzO4UAwHwYDVR0jBBgwFoAU\n",
+    "12GJH5OWi3ZUFunld9x8t2UbgCQwDQYJKoZIhvcNAQELBQADggEBAFOSlDm/mLRm\n",
+    "YnnKJr4lZb6HzjY3KvJ/p//uIh9/OOOGBlVNF+wwrCi/JtPMY/N29DHH17l6dV9d\n",
+    "hmyeg/8KScZUKxvDGyQxkd3sKrK/nahjmcLR5FGx5sqhnBUl7wzcdgObey5pAwYv\n",
+    "azVKH4EkKJ5KE/a9sGgxiAXHp8anSu8xvmqjSA6M9mS1X643QvCsPDdGHWD2iHom\n",
+    "0/FegR60yNqYaMERJz0jJv8SJ3Co38TlhH/Zr+N86RLYj3tPOsxcY5K1P8VZVPV/\n",
+    "DxVqhesv7EaeiXDhiSTFcRXytqOQX3wju4RdxiyqMd4iT98N8nTxRdbBo4EVQKql\n",
+    "PNhJBxQG0VQ=\n",
+    "-----END X509 CRL-----\n",
+    NULL
+};
+
 static X509 *test_root = NULL;
 static X509 *test_leaf = NULL;
 static X509 *test_root2 = NULL;
@@ -506,6 +590,38 @@ static int test_reuse_crl(int idx)
     return r;
 }
 
+static int crl_idp_cert_issuer(X509 *root, X509 *cert, X509_CRL *crl, int flags)
+{
+    int v_flags = X509_V_FLAG_CRL_CHECK | flags;
+
+    return TEST_int_eq(verify(cert, root, make_CRL_stack(crl, NULL), v_flags, PARAM_TIME2),
+                       X509_V_OK);
+}
+
+/*
+ * Validation to ensure Certificate Issuer extensions in CRL entries only appear
+ * when the Indirect CRL flag is TRUE in the Issuing Distribution Point (IDP)
+ * extension, as required by RFC 5280 section 5.3.3.
+ *
+ * This check is only performed when X509_V_FLAG_X509_STRICT is set.
+ */
+
+static int test_crl_idp_cert_issuer(void)
+{
+    X509 *root = X509_from_strings(kRootCertIssuerNoIDP);
+    X509 *cert = X509_from_strings(kCACertIssuerNoIDP);
+    X509_CRL *crl = CRL_from_strings(kCRLCertIssuerNoIDP);
+    int r = 0;
+
+    r = TEST_true(crl_idp_cert_issuer(root, cert, crl, 0))
+        || TEST_false(crl_idp_cert_issuer(root, cert, crl, X509_V_FLAG_X509_STRICT));
+
+    X509_CRL_free(crl);
+    X509_free(cert);
+    X509_free(root);
+    return r;
+}
+
 int setup_tests(void)
 {
     if (!TEST_ptr(test_root = X509_from_strings(kCRLTestRoot))
@@ -519,8 +635,10 @@ int setup_tests(void)
     ADD_TEST(test_bad_issuer_crl);
     ADD_TEST(test_crl_empty_idp);
     ADD_TEST(test_known_critical_crl);
+    ADD_TEST(test_crl_idp_cert_issuer);
     ADD_ALL_TESTS(test_unknown_critical_crl, OSSL_NELEM(unknown_critical_crls));
     ADD_ALL_TESTS(test_reuse_crl, 6);
+
     return 1;
 }
 
