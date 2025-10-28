@@ -8,7 +8,7 @@ This document outlines a design to change how and when FIPS Known Answer
 Tests (KATs) and other algorithm self-tests are executed within the OpenSSL
 FIPS provider. The goal is to move from the current model, where all
 self-tests are run unconditionally at provider load time, to a deferred
-model where each test is run on-demand, the first time a specific
+model where each test is run conditionally, the first time a specific
 cryptographic algorithm is requested for use.
 
 Background
@@ -37,7 +37,7 @@ still be performed when the provider is loaded.
 Requirements
 ------------
 
-1. **On-Demand Execution**: Each algorithm-specific KAT must be executed
+1. **Conditional Execution**: Each algorithm-specific KAT must be executed
    before the first cryptographic use of that algorithm.
 2. **Idempotency**: Once a self-test has been successfully executed for an
    algorithm, it must not be run again. A successful result will be cached.
