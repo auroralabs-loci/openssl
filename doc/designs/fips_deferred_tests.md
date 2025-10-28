@@ -151,7 +151,7 @@ Current Implementation
 
 The current implementation provides the foundational mechanism for deferred
 self-tests through two key functions: `FIPS_deferred_self_tests()` and
-`FIPS_kat_deferred()`. Together, they ensure that on-demand self-tests are
+`FIPS_kat_deferred()`. Together, they ensure that conditional self-tests are
 executed in a thread-safe manner.
 
 When a cryptographic algorithm is initialized for the first time, its
