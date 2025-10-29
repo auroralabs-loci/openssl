@@ -24,6 +24,9 @@
 #include <unistd.h>
 #endif
 #include "arm_arch.h"
+#ifdef __aarch64__
+#include <stdint.h>
+#endif
 
 unsigned int OPENSSL_armcap_P = 0;
 unsigned int OPENSSL_arm_midr = 0;
@@ -211,7 +214,7 @@ void _armv8_eor3_probe(void);
 void _armv8_sve_probe(void);
 void _armv8_sve2_probe(void);
 void _armv8_rng_probe(void);
-unsigned long _armv8_sve_get_vl_bytes(void);
+uint64_t _armv8_sve_get_vl_bytes(void);
 #  endif
 # endif /* !__APPLE__ && !OSSL_IMPLEMENT_GETAUXVAL */
 
