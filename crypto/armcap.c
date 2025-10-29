@@ -452,9 +452,13 @@ void OPENSSL_cpuid_setup(void)
          MIDR_IS_CPU_MODEL(OPENSSL_arm_midr, ARM_CPU_IMP_QCOMM, QCOM_CPU_PART_ORYON_X1)) &&
         (OPENSSL_armcap_P & ARMV8_SHA3))
         OPENSSL_armcap_P |= ARMV8_HAVE_SHA3_AND_WORTH_USING;
-    if ((OPENSSL_armcap_P & ARMV8_SVE2) && (_armv8_sve_get_vl_bytes() > 16)) {
-        // This implementation faster if vector length > 128 bits
-        OPENSSL_armcap_P |= ARMV8_SVE2_POLY1305;
+    if (OPENSSL_armcap_P & ARMV8_SVE2) {
+        uint64_t vl_bytes = _armv8_sve_get_vl_bytes();
+        if (vl_bytes > 16 && (vl_bytes & (vl_bytes - 1)) == 0) {
+            // This implementation faster if vector length > 128 bits
+            // But vector length must be a power of 2 (e.g. 256, 512 bits)
+            OPENSSL_armcap_P |= ARMV8_SVE2_POLY1305;
+        }
     }
 # endif
 }
