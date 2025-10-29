@@ -32,6 +32,10 @@ unsigned int OPENSSL_armcap_P = 0;
 unsigned int OPENSSL_arm_midr = 0;
 unsigned int OPENSSL_armv8_rsa_neonized = 0;
 
+#ifdef __aarch64__
+uint64_t _armv8_sve_get_vl_bytes(void);
+#endif
+
 #ifdef _WIN32
 void OPENSSL_cpuid_setup(void)
 {
@@ -214,7 +218,6 @@ void _armv8_eor3_probe(void);
 void _armv8_sve_probe(void);
 void _armv8_sve2_probe(void);
 void _armv8_rng_probe(void);
-uint64_t _armv8_sve_get_vl_bytes(void);
 #  endif
 # endif /* !__APPLE__ && !OSSL_IMPLEMENT_GETAUXVAL */
 
