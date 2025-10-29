@@ -114,7 +114,7 @@ $code.=<<___;
 
 // --- poly1305_sw_2_26 ---
 // Performs conversion of 3 base2_44 to 5 base2_26 scalars and
-//  stores them in memory at adresses [x5], [x5,#26], [x5,#56],
+//  stores them in memory at addresses [x5], [x5,#26], [x5,#56],
 //  [x5,#84] and [x5,#112].
 //
 // This is a leaf function and does not modify stack.
@@ -851,7 +851,7 @@ poly1305_blocks_sve2:
 	// 1. If vl==2 - skip to Last_reduce_sve2
 	// 2. calculate product with r^{vl/2} -> ACC{0-4}
 	// 3. lazy reduction -> H{0-4}
-	// 4. upper half of vectors (INlo{0-4}) is copied to lower halfs
+	// 4. upper half of vectors (INlo{0-4}) is copied to lower halves
 	// 5. If vl/2==2 - go to Last_reduce_sve2
 	// 6. continue with 2.
 	// NB: this part is skipped for 128-bit case (vl==2)
