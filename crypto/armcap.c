@@ -352,7 +352,7 @@ void OPENSSL_cpuid_setup(void)
             OPENSSL_armcap_P |= ARMV8_SVE;
 
         if (getauxval(OSSL_HWCAP2) & OSSL_HWCAP2_SVE2)
-            OPENSSL_armcap_P |= ARMV8_SVE2;
+            OPENSSL_armcap_P |= ARMV9_SVE2;
 
         if (getauxval(OSSL_HWCAP2) & OSSL_HWCAP2_RNG)
             OPENSSL_armcap_P |= ARMV8_RNG;
@@ -397,7 +397,7 @@ void OPENSSL_cpuid_setup(void)
     }
 #  ifdef __aarch64__
     OPENSSL_armcap_P |= arm_probe_for(_armv8_sve_probe, ARMV8_SVE);
-    OPENSSL_armcap_P |= arm_probe_for(_armv8_sve2_probe, ARMV8_SVE2);
+    OPENSSL_armcap_P |= arm_probe_for(_armv8_sve2_probe, ARMV9_SVE2);
     OPENSSL_armcap_P |= arm_probe_for(_armv8_rng_probe, ARMV8_RNG);
 #  endif
 
@@ -452,12 +452,12 @@ void OPENSSL_cpuid_setup(void)
          MIDR_IS_CPU_MODEL(OPENSSL_arm_midr, ARM_CPU_IMP_QCOMM, QCOM_CPU_PART_ORYON_X1)) &&
         (OPENSSL_armcap_P & ARMV8_SHA3))
         OPENSSL_armcap_P |= ARMV8_HAVE_SHA3_AND_WORTH_USING;
-    if (OPENSSL_armcap_P & ARMV8_SVE2) {
+    if (OPENSSL_armcap_P & ARMV9_SVE2) {
         uint64_t vl_bytes = _armv8_sve_get_vl_bytes();
         if (vl_bytes > 16 && (vl_bytes & (vl_bytes - 1)) == 0) {
             // This implementation faster if vector length > 128 bits
             // But vector length must be a power of 2 (e.g. 256, 512 bits)
-            OPENSSL_armcap_P |= ARMV8_SVE2_POLY1305;
+            OPENSSL_armcap_P |= ARMV9_SVE2_POLY1305;
         }
     }
 # endif

@@ -313,7 +313,6 @@ poly1305_blocks_sve2:
 	// Estimate vector width and branch to scalar if input too short
 	cntd	$vl					// vector width in 64-bit lanes (vl)
 	lsl	$vl0,$vl,#4				// vl * 16 (bytes per vector input blocks) 
-	//mov $vl1,$vl0,lsl #2		// 4 * vl * 16 - threshold in Neon impl.
 	add $vl1,$vl0,$vl0,lsl #1	// 3 * vl * 16 - new threshold.
 	cmp	$len,$vl1
 	b.hs	.Lblocks_sve2
