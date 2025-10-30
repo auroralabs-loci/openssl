@@ -9,6 +9,14 @@ on:
 jobs:
   loci:
     runs-on: ubuntu-latest
+
+    env:
+      LOCI_PROJECT: OpenSSL
+      LOCI_API_KEY: '${{ secrets.LOCI_API_KEY }}'
+      LOCI_BACKEND_URL: '${{ vars.LOCI_BACKEND_URL }}'
+
+    environment: ${{ vars.LOCI_ENV || 'PROD__AL_DEMO' }}
+
     steps:
       - name: Prepare environment
         run: |
@@ -31,9 +39,6 @@ jobs:
 
       - name: LOCI Upload
         uses: auroralabs-loci/loci-action@v1.0.1
-        env:
-          LOCI_BACKEND_URL: '${{ vars.LOCI_DEV_BACKEND_URL }}'
-          LOCI_API_KEY: '${{ secrets.LOCI_DEV_AGENTIC_API_KEY }}'
         with:
           mode: upload
           binaries: |
@@ -42,16 +47,14 @@ jobs:
                 libcrypto.so.4
                 libssl.so
                 libssl.so.4
-          project: OpenSSL
+          project: '${{ env.LOCI_PROJECT }}'
           wait-base: 'true'
 
       - name: Agent Summary
         uses: auroralabs-loci/loci-action@v1.0.1
         env:
-          LOCI_API_KEY: '${{ secrets.LOCI_DEV_AGENTIC_API_KEY }}'
-          LOCI_BACKEND_URL: '${{ vars.LOCI_DEV_BACKEND_URL }}'
           LOCI_GITHUB_TOKEN: '${{ secrets.REPO_READ_ONLY_PAT }}' 
         with:
           mode: summary
-          project: OpenSSL
+          project: '${{ env.LOCI_PROJECT }}'
           wait-base: 'true'
