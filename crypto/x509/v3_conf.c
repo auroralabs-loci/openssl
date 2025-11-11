@@ -340,7 +340,7 @@ int X509V3_EXT_add_nconf_sk(CONF *conf, X509V3_CTX *ctx, const char *section,
                                         val->name, val->value)) == NULL)
             return 0;
         if (sk != NULL) {
-            if (ctx->flags & X509V3_CTX_REPLACE)
+            if ((ctx->flags & X509V3_CTX_REPLACE) != 0)
                 delete_ext(*sk, ext);
             if ((ctx->flags & X509V3_CTX_REPLACE) == 0
                     || ctx->subject_req != NULL || (i != akid && i != skid)
