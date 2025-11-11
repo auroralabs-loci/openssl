@@ -49,6 +49,7 @@ jobs:
                 libssl.so.4
           project: '${{ env.LOCI_PROJECT }}'
           wait-base: 'true'
+          optimize: 'true'
 
       - name: Agent Summary
         uses: auroralabs-loci/loci-action@v1.0.1
