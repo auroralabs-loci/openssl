@@ -38,7 +38,7 @@ jobs:
         shell: bash
 
       - name: LOCI Upload
-        uses: auroralabs-loci/loci-action@v1.0.1
+        uses: auroralabs-loci/loci-action@v1.0.2
         with:
           mode: upload
           binaries: |
@@ -52,7 +52,7 @@ jobs:
           optimize: 'true'
 
       - name: Agent Summary
-        uses: auroralabs-loci/loci-action@v1.0.1
+        uses: auroralabs-loci/loci-action@v1.0.2
         env:
           LOCI_GITHUB_TOKEN: '${{ secrets.REPO_READ_ONLY_PAT }}' 
         with:
