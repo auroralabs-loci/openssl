@@ -100,16 +100,19 @@ int X509_LOOKUP_by_subject_ex(X509_LOOKUP *ctx, X509_LOOKUP_TYPE type,
                               const X509_NAME *name, X509_OBJECT *ret,
                               OSSL_LIB_CTX *libctx, const char *propq)
 {
-    if (ctx->skip
-        || ctx->method == NULL
-        || (ctx->method->get_by_subject == NULL
-            && ctx->method->get_by_subject_ex == NULL))
+    /* Optimize: check skip flag first (fastest check) */
+    if (ctx->skip)
         return 0;
+    /* Then check method existence */
+    if (ctx->method == NULL)
+        return 0;
+    /* Finally check method functions - prioritize _ex version */
     if (ctx->method->get_by_subject_ex != NULL)
         return ctx->method->get_by_subject_ex(ctx, type, name, ret, libctx,
                                               propq);
-    else
+    if (ctx->method->get_by_subject != NULL)
         return ctx->method->get_by_subject(ctx, type, name, ret);
+    return 0;
 }
 
 int X509_LOOKUP_by_subject(X509_LOOKUP *ctx, X509_LOOKUP_TYPE type,
