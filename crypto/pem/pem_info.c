@@ -91,9 +91,8 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio_ex(BIO *bp, STACK_OF(X509_INFO) *sk,
         }
         ERR_clear_last_mark();
  start:
-        if (strcmp(name, PEM_STRING_X509) == 0
-                || strcmp(name, PEM_STRING_X509_OLD) == 0
-                || strcmp(name, PEM_STRING_X509_TRUSTED) == 0) {
+        /* Optimize string comparisons by checking first character and length */
+        if (name[0] == 'C' && strcmp(name, PEM_STRING_X509) == 0) {
             if (xi->x509 != NULL) {
                 if (!sk_X509_INFO_push(ret, xi))
                     goto err;
@@ -101,15 +100,38 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio_ex(BIO *bp, STACK_OF(X509_INFO) *sk,
                     goto err;
                 goto start;
             }
-            if ((strcmp(name, PEM_STRING_X509_TRUSTED) == 0))
-                d2i = (D2I_OF(void)) d2i_X509_AUX;
-            else
-                d2i = (D2I_OF(void)) d2i_X509;
+            d2i = (D2I_OF(void)) d2i_X509;
             xi->x509 = X509_new_ex(libctx, propq);
             if (xi->x509 == NULL)
                 goto err;
             pp = &(xi->x509);
-        } else if (strcmp(name, PEM_STRING_X509_CRL) == 0) {
+        } else if (name[0] == 'X' && strcmp(name, PEM_STRING_X509_OLD) == 0) {
+            if (xi->x509 != NULL) {
+                if (!sk_X509_INFO_push(ret, xi))
+                    goto err;
+                if ((xi = X509_INFO_new()) == NULL)
+                    goto err;
+                goto start;
+            }
+            d2i = (D2I_OF(void)) d2i_X509;
+            xi->x509 = X509_new_ex(libctx, propq);
+            if (xi->x509 == NULL)
+                goto err;
+            pp = &(xi->x509);
+        } else if (name[0] == 'T' && strcmp(name, PEM_STRING_X509_TRUSTED) == 0) {
+            if (xi->x509 != NULL) {
+                if (!sk_X509_INFO_push(ret, xi))
+                    goto err;
+                if ((xi = X509_INFO_new()) == NULL)
+                    goto err;
+                goto start;
+            }
+            d2i = (D2I_OF(void)) d2i_X509_AUX;
+            xi->x509 = X509_new_ex(libctx, propq);
+            if (xi->x509 == NULL)
+                goto err;
+            pp = &(xi->x509);
+        } else if (name[0] == 'X' && strcmp(name, PEM_STRING_X509_CRL) == 0) {
             d2i = (D2I_OF(void)) d2i_X509_CRL;
             if (xi->crl != NULL) {
                 if (!sk_X509_INFO_push(ret, xi))
@@ -127,7 +149,9 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio_ex(BIO *bp, STACK_OF(X509_INFO) *sk,
                     goto err;
                 goto start;
             }
-            if (str == name || strcmp(name, PEM_STRING_PKCS8) == 0) {
+            /* Cache the strcmp result to avoid duplicate comparison */
+            int is_pkcs8 = (strcmp(name, PEM_STRING_PKCS8) == 0);
+            if (str == name || is_pkcs8) {
                 ptype = EVP_PKEY_NONE;
             } else {
                 /* chop " PRIVATE KEY" */
@@ -142,8 +166,7 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio_ex(BIO *bp, STACK_OF(X509_INFO) *sk,
             if (xi->x_pkey == NULL)
                 goto err;
             pp = &xi->x_pkey->dec_pkey;
-            if ((int)strlen(header) > 10 /* assume encrypted */
-                   || strcmp(name, PEM_STRING_PKCS8) == 0)
+            if ((int)strlen(header) > 10 /* assume encrypted */ || is_pkcs8)
                 raw = 1;
         } else { /* unknown */
             d2i = NULL;
