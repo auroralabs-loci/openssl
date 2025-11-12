@@ -76,75 +76,62 @@ static void *evp_kdf_from_algorithm(int name_id,
     for (; fns->function_id != 0; fns++) {
         switch (fns->function_id) {
         case OSSL_FUNC_KDF_NEWCTX:
-            if (kdf->newctx != NULL)
-                break;
-            kdf->newctx = OSSL_FUNC_kdf_newctx(fns);
-            fnctxcnt++;
+            if (kdf->newctx == NULL) {
+                kdf->newctx = OSSL_FUNC_kdf_newctx(fns);
+                fnctxcnt++;
+            }
             break;
         case OSSL_FUNC_KDF_DUPCTX:
-            if (kdf->dupctx != NULL)
-                break;
-            kdf->dupctx = OSSL_FUNC_kdf_dupctx(fns);
+            if (kdf->dupctx == NULL)
+                kdf->dupctx = OSSL_FUNC_kdf_dupctx(fns);
             break;
         case OSSL_FUNC_KDF_FREECTX:
-            if (kdf->freectx != NULL)
-                break;
-            kdf->freectx = OSSL_FUNC_kdf_freectx(fns);
-            fnctxcnt++;
+            if (kdf->freectx == NULL) {
+                kdf->freectx = OSSL_FUNC_kdf_freectx(fns);
+                fnctxcnt++;
+            }
             break;
         case OSSL_FUNC_KDF_RESET:
-            if (kdf->reset != NULL)
-                break;
-            kdf->reset = OSSL_FUNC_kdf_reset(fns);
+            if (kdf->reset == NULL)
+                kdf->reset = OSSL_FUNC_kdf_reset(fns);
             break;
         case OSSL_FUNC_KDF_DERIVE:
-            if (kdf->derive != NULL)
-                break;
-            kdf->derive = OSSL_FUNC_kdf_derive(fns);
-            fnkdfcnt++;
+            if (kdf->derive == NULL) {
+                kdf->derive = OSSL_FUNC_kdf_derive(fns);
+                fnkdfcnt++;
+            }
             break;
         case OSSL_FUNC_KDF_GETTABLE_PARAMS:
-            if (kdf->gettable_params != NULL)
-                break;
-            kdf->gettable_params =
-                OSSL_FUNC_kdf_gettable_params(fns);
+            if (kdf->gettable_params == NULL)
+                kdf->gettable_params = OSSL_FUNC_kdf_gettable_params(fns);
             break;
         case OSSL_FUNC_KDF_GETTABLE_CTX_PARAMS:
-            if (kdf->gettable_ctx_params != NULL)
-                break;
-            kdf->gettable_ctx_params =
-                OSSL_FUNC_kdf_gettable_ctx_params(fns);
+            if (kdf->gettable_ctx_params == NULL)
+                kdf->gettable_ctx_params = OSSL_FUNC_kdf_gettable_ctx_params(fns);
             break;
         case OSSL_FUNC_KDF_SETTABLE_CTX_PARAMS:
-            if (kdf->settable_ctx_params != NULL)
-                break;
-            kdf->settable_ctx_params =
-                OSSL_FUNC_kdf_settable_ctx_params(fns);
+            if (kdf->settable_ctx_params == NULL)
+                kdf->settable_ctx_params = OSSL_FUNC_kdf_settable_ctx_params(fns);
             break;
         case OSSL_FUNC_KDF_GET_PARAMS:
-            if (kdf->get_params != NULL)
-                break;
-            kdf->get_params = OSSL_FUNC_kdf_get_params(fns);
+            if (kdf->get_params == NULL)
+                kdf->get_params = OSSL_FUNC_kdf_get_params(fns);
             break;
         case OSSL_FUNC_KDF_GET_CTX_PARAMS:
-            if (kdf->get_ctx_params != NULL)
-                break;
-            kdf->get_ctx_params = OSSL_FUNC_kdf_get_ctx_params(fns);
+            if (kdf->get_ctx_params == NULL)
+                kdf->get_ctx_params = OSSL_FUNC_kdf_get_ctx_params(fns);
             break;
         case OSSL_FUNC_KDF_SET_CTX_PARAMS:
-            if (kdf->set_ctx_params != NULL)
-                break;
-            kdf->set_ctx_params = OSSL_FUNC_kdf_set_ctx_params(fns);
+            if (kdf->set_ctx_params == NULL)
+                kdf->set_ctx_params = OSSL_FUNC_kdf_set_ctx_params(fns);
             break;
         case OSSL_FUNC_KDF_SET_SKEY:
-            if (kdf->set_skey != NULL)
-                break;
-            kdf->set_skey = OSSL_FUNC_kdf_set_skey(fns);
+            if (kdf->set_skey == NULL)
+                kdf->set_skey = OSSL_FUNC_kdf_set_skey(fns);
             break;
         case OSSL_FUNC_KDF_DERIVE_SKEY:
-            if (kdf->derive_skey != NULL)
-                break;
-            kdf->derive_skey = OSSL_FUNC_kdf_derive_skey(fns);
+            if (kdf->derive_skey == NULL)
+                kdf->derive_skey = OSSL_FUNC_kdf_derive_skey(fns);
             break;
         }
     }
