@@ -52,9 +52,7 @@ static EVP_PKEY *pem_read_bio_key_decoder(BIO *bp, EVP_PKEY **x,
     if (dctx == NULL)
         return NULL;
 
-    if (cb == NULL)
-        cb = PEM_def_callback;
-
+    /* cb is already guaranteed to be non-NULL by caller */
     if (!OSSL_DECODER_CTX_set_pem_password_cb(dctx, cb, u))
         goto err;
 
@@ -224,6 +222,10 @@ static EVP_PKEY *pem_read_bio_key(BIO *bp, EVP_PKEY **x,
     int pos;
     struct ossl_passphrase_data_st pwdata = { 0 };
 
+    /* Set default callback early to avoid duplicate checks */
+    if (cb == NULL)
+        cb = PEM_def_callback;
+
     if ((pos = BIO_tell(bp)) < 0) {
         new_bio = BIO_new(BIO_f_readbuffer());
         if (new_bio == NULL)
@@ -231,9 +233,6 @@ static EVP_PKEY *pem_read_bio_key(BIO *bp, EVP_PKEY **x,
         bp = BIO_push(new_bio, bp);
         pos = BIO_tell(bp);
     }
-
-    if (cb == NULL)
-        cb = PEM_def_callback;
 
     if (!ossl_pw_set_pem_password_cb(&pwdata, cb, u)
         || !ossl_pw_enable_passphrase_caching(&pwdata))
