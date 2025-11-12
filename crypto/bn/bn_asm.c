@@ -24,7 +24,22 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
         return c1;
 
 # ifndef OPENSSL_SMALL_FOOTPRINT
-    while (num & ~3) {
+    /* Optimized 8-way loop unrolling for better ILP and cache utilization */
+    while (num >= 8) {
+        mul_add(rp[0], ap[0], w, c1);
+        mul_add(rp[1], ap[1], w, c1);
+        mul_add(rp[2], ap[2], w, c1);
+        mul_add(rp[3], ap[3], w, c1);
+        mul_add(rp[4], ap[4], w, c1);
+        mul_add(rp[5], ap[5], w, c1);
+        mul_add(rp[6], ap[6], w, c1);
+        mul_add(rp[7], ap[7], w, c1);
+        ap += 8;
+        rp += 8;
+        num -= 8;
+    }
+    /* Handle remaining 4-7 elements with 4-way unrolling */
+    if (num >= 4) {
         mul_add(rp[0], ap[0], w, c1);
         mul_add(rp[1], ap[1], w, c1);
         mul_add(rp[2], ap[2], w, c1);
@@ -34,6 +49,7 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
         num -= 4;
     }
 # endif
+    /* Handle remaining 0-3 elements */
     while (num) {
         mul_add(rp[0], ap[0], w, c1);
         ap++;
@@ -53,7 +69,22 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
         return c1;
 
 # ifndef OPENSSL_SMALL_FOOTPRINT
-    while (num & ~3) {
+    /* Optimized 8-way loop unrolling for better ILP */
+    while (num >= 8) {
+        mul(rp[0], ap[0], w, c1);
+        mul(rp[1], ap[1], w, c1);
+        mul(rp[2], ap[2], w, c1);
+        mul(rp[3], ap[3], w, c1);
+        mul(rp[4], ap[4], w, c1);
+        mul(rp[5], ap[5], w, c1);
+        mul(rp[6], ap[6], w, c1);
+        mul(rp[7], ap[7], w, c1);
+        ap += 8;
+        rp += 8;
+        num -= 8;
+    }
+    /* Handle remaining 4-7 elements */
+    if (num >= 4) {
         mul(rp[0], ap[0], w, c1);
         mul(rp[1], ap[1], w, c1);
         mul(rp[2], ap[2], w, c1);
@@ -63,6 +94,7 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
         num -= 4;
     }
 # endif
+    /* Handle remaining 0-3 elements */
     while (num) {
         mul(rp[0], ap[0], w, c1);
         ap++;
@@ -114,7 +146,22 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
     bh = HBITS(w);
 
 # ifndef OPENSSL_SMALL_FOOTPRINT
-    while (num & ~3) {
+    /* Optimized 8-way loop unrolling for better ILP */
+    while (num >= 8) {
+        mul_add(rp[0], ap[0], bl, bh, c);
+        mul_add(rp[1], ap[1], bl, bh, c);
+        mul_add(rp[2], ap[2], bl, bh, c);
+        mul_add(rp[3], ap[3], bl, bh, c);
+        mul_add(rp[4], ap[4], bl, bh, c);
+        mul_add(rp[5], ap[5], bl, bh, c);
+        mul_add(rp[6], ap[6], bl, bh, c);
+        mul_add(rp[7], ap[7], bl, bh, c);
+        ap += 8;
+        rp += 8;
+        num -= 8;
+    }
+    /* Handle remaining 4-7 elements */
+    if (num >= 4) {
         mul_add(rp[0], ap[0], bl, bh, c);
         mul_add(rp[1], ap[1], bl, bh, c);
         mul_add(rp[2], ap[2], bl, bh, c);
@@ -124,6 +171,7 @@ BN_ULONG bn_mul_add_words(BN_ULONG *rp, const BN_ULONG *ap, int num,
         num -= 4;
     }
 # endif
+    /* Handle remaining 0-3 elements */
     while (num) {
         mul_add(rp[0], ap[0], bl, bh, c);
         ap++;
@@ -146,7 +194,22 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
     bh = HBITS(w);
 
 # ifndef OPENSSL_SMALL_FOOTPRINT
-    while (num & ~3) {
+    /* Optimized 8-way loop unrolling for better ILP */
+    while (num >= 8) {
+        mul(rp[0], ap[0], bl, bh, carry);
+        mul(rp[1], ap[1], bl, bh, carry);
+        mul(rp[2], ap[2], bl, bh, carry);
+        mul(rp[3], ap[3], bl, bh, carry);
+        mul(rp[4], ap[4], bl, bh, carry);
+        mul(rp[5], ap[5], bl, bh, carry);
+        mul(rp[6], ap[6], bl, bh, carry);
+        mul(rp[7], ap[7], bl, bh, carry);
+        ap += 8;
+        rp += 8;
+        num -= 8;
+    }
+    /* Handle remaining 4-7 elements */
+    if (num >= 4) {
         mul(rp[0], ap[0], bl, bh, carry);
         mul(rp[1], ap[1], bl, bh, carry);
         mul(rp[2], ap[2], bl, bh, carry);
@@ -156,6 +219,7 @@ BN_ULONG bn_mul_words(BN_ULONG *rp, const BN_ULONG *ap, int num, BN_ULONG w)
         num -= 4;
     }
 # endif
+    /* Handle remaining 0-3 elements */
     while (num) {
         mul(rp[0], ap[0], bl, bh, carry);
         ap++;
