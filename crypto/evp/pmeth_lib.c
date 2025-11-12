@@ -907,8 +907,17 @@ int evp_pkey_ctx_get_params_strict(EVP_PKEY_CTX *ctx, OSSL_PARAM *params)
      * known the ctrl command number.
      */
     if (evp_pkey_ctx_is_provided(ctx)) {
-        const OSSL_PARAM *gettable = EVP_PKEY_CTX_gettable_params(ctx);
+        const OSSL_PARAM *gettable = NULL;
         const OSSL_PARAM *p;
+
+        /* Early exit if params array is empty */
+        if (params->key == NULL)
+            goto skip_validation;
+
+        /* Lazily fetch gettable params only if we have params to validate */
+        gettable = EVP_PKEY_CTX_gettable_params(ctx);
+        if (gettable == NULL)
+            return -2;
 
         for (p = params; p->key != NULL; p++) {
             /* Check the ctx actually understands this parameter */
@@ -917,6 +926,7 @@ int evp_pkey_ctx_get_params_strict(EVP_PKEY_CTX *ctx, OSSL_PARAM *params)
         }
     }
 
+skip_validation:
     if ((ret = EVP_PKEY_CTX_get_params(ctx, params)) <= 0)
         return ret;
 
