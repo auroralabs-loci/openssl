@@ -37,7 +37,7 @@
 
 # $output is the last argument if it looks like a file (it has an extension)
 # $flavour is the first argument if it doesn't look like a file
-$output = $#ARGV >= 0 && $ARGV[$#ARGV] =~ m|\.\w+$| ? pop : undef;
+$output = $#ARGV >= 0 && $ARGV[$#ARGV] =~ m|\.\.+$| ? pop : undef;
 $flavour = $#ARGV >= 0 && $ARGV[0] !~ m|\.| ? shift : undef;
 
 $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
@@ -97,26 +97,35 @@ poly1305_init:
 	and	$r1,$r1,$s1		// &=0ffffffc0ffffffc
 	stp	$r0,$r1,[$ctx,#32]	// save key value
 
-	tst	w17,#ARMV7_NEON
+	// Optimized: Check SVE2 first (most specific capability)
+	tst	w17, #ARMV9_SVE2_POLY1305
+	b.ne	.Luse_sve2
 
+	// Check NEON support
+	tst	w17,#ARMV7_NEON
+	b.ne	.Luse_neon
+
+	// Use default scalar implementation
 	adrp	$d0,poly1305_blocks
 	add	$d0,$d0,#:lo12:.Lpoly1305_blocks
-	adrp	$r0,poly1305_blocks_neon
-	add	$r0,$r0,#:lo12:.Lpoly1305_blocks_neon
 	adrp	$d1,poly1305_emit
 	add	$d1,$d1,#:lo12:.Lpoly1305_emit
-	adrp	$r1,poly1305_emit_neon
-	add	$r1,$r1,#:lo12:.Lpoly1305_emit_neon
+	b	.Lstore_func_ptrs
 
-	csel	$d0,$d0,$r0,eq
-	csel	$d1,$d1,$r1,eq
+.Luse_neon:
+	adrp	$d0,poly1305_blocks_neon
+	add	$d0,$d0,#:lo12:.Lpoly1305_blocks_neon
+	adrp	$d1,poly1305_emit_neon
+	add	$d1,$d1,#:lo12:.Lpoly1305_emit_neon
+	b	.Lstore_func_ptrs
 
-	tst	w17, #ARMV9_SVE2_POLY1305
+.Luse_sve2:
+	adrp	$d0,poly1305_blocks_sve2
+	add	$d0,$d0,#:lo12:poly1305_blocks_sve2
+	adrp	$d1,poly1305_emit_neon
+	add	$d1,$d1,#:lo12:.Lpoly1305_emit_neon
 
-	adrp	$r0,poly1305_blocks_sve2
-	add	$r0,$r0,#:lo12:poly1305_blocks_sve2
-
-	csel	$d0,$d0,$r0,eq
+.Lstore_func_ptrs:
 
 #ifdef	__ILP32__
 	stp	w12,w13,[$len]
