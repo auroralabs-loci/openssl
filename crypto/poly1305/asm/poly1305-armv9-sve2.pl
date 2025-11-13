@@ -114,7 +114,7 @@ $code.=<<___;
 
 // --- poly1305_sw_2_26 ---
 // Performs conversion of 3 base2_44 to 5 base2_26 scalars and
-//  stores them in memory at addresses [x5], [x5,#26], [x5,#56],
+//  stores them in memory at addresses [x5], [x5,#28], [x5,#56],
 //  [x5,#84] and [x5,#112].
 //
 // This is a leaf function and does not modify stack.
@@ -204,7 +204,7 @@ poly1305_sqr_2_44:
 	and		$r0,$cs0,$mask	// r0 -> d0_lo & mask
 	orr		x10,x10,x11		// x10 -> 64-bit carry from d0
     
-	lsr		x12,$cs2,#44	// (d1_hi >> 44)
+	lsr		x12,$cs2,#44	// (d1_lo >> 44)
 	lsl		x13,$cs3,#20	// (d1_hi << 20)
 	and		$r1,$cs2,$mask	// r1 -> d1_lo & mask
 	orr		x12,x12,x13		// x12 -> 64-bit carry from d1
