@@ -683,6 +683,12 @@ static void warn_cert(const char *uri, X509 *cert, int warn_EE,
                       X509_VERIFY_PARAM *vpm)
 {
     uint32_t ex_flags = X509_get_extension_flags(cert);
+    /*
+     * This should not be used as as example for how to verify
+     * certificates. This treats an invalid not before or an invalid
+     * not after time in the certificate as infinitely valid, which
+     * you don't want outside of a toy testing function like this.
+     */
     int res = X509_cmp_timeframe(vpm, X509_get0_notBefore(cert),
                                  X509_get0_notAfter(cert));
 
@@ -932,7 +938,7 @@ int load_key_certs_crls(const char *uri, int format, int maybe_stdin,
     SET_EXPECT1(pparams, OSSL_STORE_INFO_PARAMS);
     SET_EXPECT1(pcert, OSSL_STORE_INFO_CERT);
     /*
-     * Up to here, the follwing holds.
+     * Up to here, the following holds.
      * If just one of the ppkey, ppubkey, pparams, and pcert function parameters
      * is nonzero, expect > 0 indicates which type of credential is expected.
      * If expect == 0, more than one of them is nonzero (multiple types expected).

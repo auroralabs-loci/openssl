@@ -1740,15 +1740,6 @@ int SSL_set_fd(SSL *s, int fd)
     }
     BIO_set_fd(bio, fd, BIO_NOCLOSE);
     SSL_set_bio(s, bio, bio);
-#ifndef OPENSSL_NO_KTLS
-    /*
-     * The new socket is created successfully regardless of ktls_enable.
-     * ktls_enable doesn't change any functionality of the socket, except
-     * changing the setsockopt to enable the processing of ktls_start.
-     * Thus, it is not a problem to call it for non-TLS sockets.
-     */
-    ktls_enable(fd);
-#endif /* OPENSSL_NO_KTLS */
     ret = 1;
  err:
     return ret;
@@ -1774,15 +1765,6 @@ int SSL_set_wfd(SSL *s, int fd)
         }
         BIO_set_fd(bio, fd, BIO_NOCLOSE);
         SSL_set0_wbio(s, bio);
-#ifndef OPENSSL_NO_KTLS
-        /*
-         * The new socket is created successfully regardless of ktls_enable.
-         * ktls_enable doesn't change any functionality of the socket, except
-         * changing the setsockopt to enable the processing of ktls_start.
-         * Thus, it is not a problem to call it for non-TLS sockets.
-         */
-        ktls_enable(fd);
-#endif /* OPENSSL_NO_KTLS */
     } else {
         if (!BIO_up_ref(rbio))
             return 0;
@@ -3476,17 +3458,19 @@ char *SSL_get_shared_ciphers(const SSL *s, char *buf, int size)
             continue;
 
         n = (int)OPENSSL_strnlen(c->name, size);
-        if (n >= size) {
-            if (p != buf)
-                --p;
-            *p = '\0';
-            return buf;
-        }
+        if (n >= size)
+            break;
+
         memcpy(p, c->name, n);
         p += n;
         *(p++) = ':';
         size -= n + 1;
     }
+
+    /* No overlap */
+    if (p == buf)
+        return NULL;
+
     p[-1] = '\0';
     return buf;
 }
@@ -3962,8 +3946,8 @@ static long check_keylog_bio_free(BIO *b, int oper, const char *argp,
     /*
      * Note we _dont_ take the keylog_lock here
      * This is intentional, because we only free the keylog lock
-     * During SSL_CTX_free, in which we already posess the lock, so
-     * Theres no need to grab it again here
+     * During SSL_CTX_free, in which we already possess the lock, so
+     * There's no need to grab it again here
      */
     if (oper == BIO_CB_FREE)
         keylog_bio = NULL;
@@ -4319,7 +4303,7 @@ SSL_CTX *SSL_CTX_new_ex(OSSL_LIB_CTX *libctx, const char *propq,
         /* Make sure we have a global lock allocated */
         if (!RUN_ONCE(&ssl_keylog_once, ssl_keylog_init)) {
             /* use a trace message as a warning */
-            OSSL_TRACE(TLS, "Unable to initalize keylog data\n");
+            OSSL_TRACE(TLS, "Unable to initialize keylog data\n");
             goto out;
         }
 
@@ -8100,6 +8084,18 @@ size_t SSL_get_accept_connection_queue_len(SSL *ssl)
         return 0;
 
     return ossl_quic_get_accept_connection_queue_len(ssl);
+#else
+    return 0;
+#endif
+}
+
+int SSL_get_peer_addr(SSL *ssl, BIO_ADDR *peer_addr)
+{
+#ifndef OPENSSL_NO_QUIC
+    if (!IS_QUIC(ssl))
+        return 0;
+
+    return ossl_quic_get_peer_addr(ssl, peer_addr);
 #else
     return 0;
 #endif

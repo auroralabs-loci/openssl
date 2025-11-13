@@ -3944,6 +3944,48 @@ static int test_RSA_OAEP_set_null_label(void)
     return ret;
 }
 
+static int test_RSA_encrypt(void)
+{
+    int ret = 0;
+    EVP_PKEY *pkey = NULL;
+    EVP_PKEY_CTX *pctx = NULL;
+    unsigned char *cbuf = NULL, *pbuf = NULL;
+    size_t clen = 0, plen = 0;
+
+    if (!TEST_ptr(pkey = load_example_rsa_key())
+        || !TEST_ptr(pctx = EVP_PKEY_CTX_new_from_pkey(testctx,
+                                                       pkey, testpropq))
+        || !TEST_int_gt(EVP_PKEY_encrypt_init(pctx), 0)
+        || !TEST_int_gt(EVP_PKEY_encrypt(pctx, cbuf, &clen, kMsg, sizeof(kMsg)), 0)
+        || !TEST_ptr(cbuf = OPENSSL_malloc(clen))
+        || !TEST_int_gt(EVP_PKEY_encrypt(pctx, cbuf, &clen, kMsg, sizeof(kMsg)), 0))
+        goto done;
+
+    /* Require failure when the output buffer is too small */
+    plen = clen - 1;
+    if (!TEST_int_le(EVP_PKEY_encrypt(pctx, cbuf, &plen, kMsg, sizeof(kMsg)), 0))
+        goto done;
+    /* flush error stack */
+    TEST_openssl_errors();
+
+    /* Check decryption of encrypted result */
+    if (!TEST_int_gt(EVP_PKEY_decrypt_init(pctx), 0)
+        || !TEST_int_gt(EVP_PKEY_decrypt(pctx, pbuf, &plen, cbuf, clen), 0)
+        || !TEST_ptr(pbuf = OPENSSL_malloc(plen))
+        || !TEST_int_gt(EVP_PKEY_decrypt(pctx, pbuf, &plen, cbuf, clen), 0)
+        || !TEST_mem_eq(pbuf, plen, kMsg, sizeof(kMsg))
+        || !TEST_int_gt(EVP_PKEY_encrypt_init(pctx), 0))
+        goto done;
+
+    ret = 1;
+done:
+    EVP_PKEY_CTX_free(pctx);
+    EVP_PKEY_free(pkey);
+    OPENSSL_free(cbuf);
+    OPENSSL_free(pbuf);
+    return ret;
+}
+
 #ifndef OPENSSL_NO_DEPRECATED_3_0
 static int test_RSA_legacy(void)
 {
@@ -4024,10 +4066,16 @@ static int test_decrypt_null_chunks(void)
     unsigned char msg[] = "It was the best of times, it was the worst of times";
     unsigned char ciphertext[80];
     unsigned char plaintext[80];
+    unsigned char tag[16];
     /* We initialise tmp to a non zero value on purpose */
     int ctlen, ptlen, tmp = 99;
     int ret = 0;
     const int enc_offset = 10, dec_offset = 20;
+    OSSL_PARAM params[2];
+
+    params[0] = OSSL_PARAM_construct_octet_string(OSSL_CIPHER_PARAM_AEAD_TAG,
+                                                  tag, sizeof(tag));
+    params[1] = OSSL_PARAM_construct_end();
 
     if (!TEST_ptr(cipher = EVP_CIPHER_fetch(testctx, "ChaCha20-Poly1305", testpropq))
             || !TEST_ptr(ctx = EVP_CIPHER_CTX_new())
@@ -4044,12 +4092,13 @@ static int test_decrypt_null_chunks(void)
                                             sizeof(msg) - enc_offset))
             || !TEST_int_eq(ctlen += tmp, sizeof(msg))
             || !TEST_true(EVP_EncryptFinal(ctx, ciphertext + ctlen, &tmp))
-            || !TEST_int_eq(tmp, 0))
+            || !TEST_int_eq(tmp, 0)
+            || !TEST_true(EVP_CIPHER_CTX_get_params(ctx, params)))
         goto err;
 
     /* Deliberately initialise tmp to a non zero value */
     tmp = 99;
-    if (!TEST_true(EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv))
+    if (!TEST_true(EVP_DecryptInit_ex2(ctx, cipher, key, iv, params))
             || !TEST_true(EVP_DecryptUpdate(ctx, plaintext, &ptlen, ciphertext,
                                             dec_offset))
             /*
@@ -4321,13 +4370,12 @@ static int test_evp_iv_aes(int idx)
         1, 2, 3, 4, 5, 6, 7, 8,
         9, 10, 11, 12, 13, 14, 15, 16
     };
-    unsigned char ciphertext[32], oiv[16], iv[16];
-    unsigned char *ref_iv;
+    unsigned char ciphertext[32], oiv1[16], oiv[16], iv[16], uiv[16];
+    unsigned char *ref_iv, *start_iv = init_iv;
     unsigned char cbc_state[16] = {
         0x10, 0x2f, 0x05, 0xcc, 0xc2, 0x55, 0x72, 0xb9,
         0x88, 0xe6, 0x4a, 0x17, 0x10, 0x74, 0x22, 0x5e
     };
-
     unsigned char ofb_state[16] = {
         0x76, 0xe6, 0x66, 0x61, 0xd0, 0x8a, 0xe4, 0x64,
         0xdd, 0x66, 0xbf, 0x00, 0xf0, 0xe3, 0x6f, 0xfd
@@ -4395,6 +4443,12 @@ static int test_evp_iv_aes(int idx)
         ref_iv = gcm_state;
         ref_len = sizeof(gcm_state);
         break;
+    case 12:
+        ref_iv = NULL;
+        ref_len = 0;
+        start_iv = NULL; /* This will cause a random iv to be generated internally */
+        type = EVP_CIPHER_fetch(testctx, "aes-128-gcm", testpropq);
+        break;
     case 4:
         type = EVP_aes_128_ccm();
         /* FALLTHROUGH */
@@ -4425,7 +4479,8 @@ static int test_evp_iv_aes(int idx)
 
     if (!TEST_ptr(type)
             || !TEST_ptr((ctx = EVP_CIPHER_CTX_new()))
-            || !TEST_true(EVP_EncryptInit_ex(ctx, type, NULL, key, init_iv))
+            || !TEST_true(EVP_EncryptInit_ex(ctx, type, NULL, key, start_iv))
+            || !TEST_true(EVP_CIPHER_CTX_get_original_iv(ctx, oiv1, sizeof(oiv1)))
             || !TEST_true(EVP_EncryptUpdate(ctx, ciphertext, &len, msg,
                           (int)sizeof(msg)))
             || !TEST_true(EVP_CIPHER_CTX_get_original_iv(ctx, oiv, sizeof(oiv)))
@@ -4437,19 +4492,21 @@ static int test_evp_iv_aes(int idx)
     if (!TEST_size_t_gt(ivlen, 0))
         goto err;
 
-    if (!TEST_mem_eq(init_iv, ivlen, oiv, ivlen)
-            || !TEST_mem_eq(ref_iv, ref_len, iv, ivlen))
+    if (start_iv == NULL)
+        start_iv = oiv1;
+    if (!TEST_mem_eq(start_iv, ivlen, oiv, ivlen)
+            || (ref_iv != NULL && !TEST_mem_eq(ref_iv, ref_len, iv, ivlen)))
         goto err;
 
     /* CBC, OFB, and CFB modes: the updated iv must be reset after reinit */
     if (!TEST_true(EVP_EncryptInit_ex(ctx, NULL, NULL, NULL, NULL))
-        || !TEST_true(EVP_CIPHER_CTX_get_updated_iv(ctx, iv, sizeof(iv))))
+        || !TEST_true(EVP_CIPHER_CTX_get_updated_iv(ctx, uiv, sizeof(uiv))))
         goto err;
     if (iv_reset) {
-        if (!TEST_mem_eq(init_iv, ivlen, iv, ivlen))
+        if (!TEST_mem_eq(start_iv, ivlen, uiv, ivlen))
             goto err;
     } else {
-        if (!TEST_mem_eq(ref_iv, ivlen, iv, ivlen))
+        if (!TEST_mem_eq(uiv, ivlen, iv, ivlen))
             goto err;
     }
 
@@ -5212,6 +5269,83 @@ static int test_evp_updated_iv(int idx)
         TEST_info("test_evp_updated_iv %d: %s", idx, errmsg);
     EVP_CIPHER_CTX_free(ctx);
     EVP_CIPHER_free(type);
+    return testresult;
+}
+
+typedef struct {
+    const char *cipher;
+} EVP_FINAL_NO_TAG_TEST_st;
+
+static const EVP_FINAL_NO_TAG_TEST_st evp_final_no_tag[] = {
+    {
+        "chacha20-poly1305"
+    },
+    {
+        "aes-256-gcm"
+    }
+};
+
+static int test_evp_final_no_tag(int idx)
+{
+    const EVP_FINAL_NO_TAG_TEST_st *t = &evp_final_no_tag[idx];
+    EVP_CIPHER_CTX *ctx = NULL;
+    EVP_CIPHER *cipher = NULL;
+    unsigned char tag[16];
+    unsigned char data[5] = {1, 1, 1, 1, 1};
+    uint32_t data_len = 5;
+    unsigned char ctext[1024], plaintext[1024];
+    int ctext_len = 0, len = 0, testresult = 0;
+    unsigned char key[] = {
+        0xc9, 0xee, 0xa3, 0x0c, 0x1c, 0x59, 0x0c, 0x8b, 0xd8, 0xbb, 0xa1, 0x1c,
+        0xbc, 0x3a, 0x56, 0xe7, 0xb7, 0xe1, 0x9f, 0xfd, 0x3b, 0x4a, 0xa3, 0xd5,
+        0xc4, 0xdc, 0x2e, 0x62, 0xe6, 0x75, 0x15, 0x5c
+    };
+    unsigned char iv[16] = {
+        0x03, 0x2d, 0x79, 0xef, 0xed, 0x2e, 0xad, 0x3e, 0x0b, 0xdc, 0x8f, 0x57,
+        0x0d, 0x0e, 0x0f, 0x10
+    };
+
+    if ((cipher = EVP_CIPHER_fetch(testctx, t->cipher, testpropq)) == NULL) {
+        TEST_info("cipher %s not supported, skipping", t->cipher);
+        goto ok;
+    }
+
+    if (!TEST_ptr(ctx = EVP_CIPHER_CTX_new()))
+        goto err;
+    if (!TEST_true(EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv)))
+        goto err;
+    if (!TEST_true(EVP_EncryptUpdate(ctx, ctext, &len, data, data_len)))
+        goto err;
+    ctext_len = len;
+    if (!TEST_true(EVP_EncryptFinal_ex(ctx, ctext + len, &len)))
+        goto err;
+
+    ctext_len += len;
+    if (!TEST_true(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, 16, tag)))
+        goto err;
+    EVP_CIPHER_CTX_free(ctx);
+
+    if (!TEST_ptr(ctx = EVP_CIPHER_CTX_new()))
+        goto err;
+    if (!TEST_true(EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv)))
+        goto err;
+    if (!TEST_true(EVP_DecryptUpdate(ctx, plaintext, &len, ctext, ctext_len)))
+        goto err;
+    if (!TEST_mem_eq(plaintext, 5, data, 5))
+        goto err;
+
+    /*
+     * The tag must be set before decrypting the data; here we expect failure
+     * for each of the defined ciphers.
+     */
+    if (!TEST_false(EVP_DecryptFinal_ex(ctx, ctext + len, &len)))
+        goto err;
+
+ok:
+    testresult = 1;
+err:
+    EVP_CIPHER_CTX_free(ctx);
+    EVP_CIPHER_free(cipher);
     return testresult;
 }
 
@@ -6835,6 +6969,7 @@ int setup_tests(void)
     ADD_TEST(test_RSA_get_set_params);
     ADD_TEST(test_RSA_OAEP_set_get_params);
     ADD_TEST(test_RSA_OAEP_set_null_label);
+    ADD_TEST(test_RSA_encrypt);
 #ifndef OPENSSL_NO_DEPRECATED_3_0
     ADD_TEST(test_RSA_legacy);
 #endif
@@ -6859,7 +6994,7 @@ int setup_tests(void)
     ADD_ALL_TESTS(test_pkey_ctx_fail_without_provider, 2);
 
     ADD_TEST(test_rand_agglomeration);
-    ADD_ALL_TESTS(test_evp_iv_aes, 12);
+    ADD_ALL_TESTS(test_evp_iv_aes, 13);
 #ifndef OPENSSL_NO_DES
     ADD_ALL_TESTS(test_evp_iv_des, 6);
 #endif
@@ -6880,6 +7015,8 @@ int setup_tests(void)
     ADD_ALL_TESTS(test_evp_reinit_seq, OSSL_NELEM(evp_reinit_tests));
     ADD_ALL_TESTS(test_gcm_reinit, OSSL_NELEM(gcm_reinit_tests));
     ADD_ALL_TESTS(test_evp_updated_iv, OSSL_NELEM(evp_updated_iv_tests));
+    ADD_ALL_TESTS(test_evp_final_no_tag, OSSL_NELEM(evp_final_no_tag));
+
     ADD_ALL_TESTS(test_ivlen_change, OSSL_NELEM(ivlen_change_ciphers));
     if (OSSL_NELEM(keylen_change_ciphers) - 1 > 0)
         ADD_ALL_TESTS(test_keylen_change, OSSL_NELEM(keylen_change_ciphers) - 1);

@@ -3241,6 +3241,7 @@ int ossl_quic_conn_stream_conclude(SSL *s)
     QCTX ctx;
     QUIC_STREAM *qs;
     int err;
+    int ret;
 
     if (!expect_quic_with_stream_lock(s, /*remote_init=*/0, /*io=*/0, &ctx))
         return 0;
@@ -3248,13 +3249,15 @@ int ossl_quic_conn_stream_conclude(SSL *s)
     qs = ctx.xso->stream;
 
     if (!quic_mutation_allowed(ctx.qc, /*req_active=*/1)) {
+        ret = QUIC_RAISE_NON_NORMAL_ERROR(&ctx, SSL_R_PROTOCOL_IS_SHUTDOWN, NULL);
         qctx_unlock(&ctx);
-        return QUIC_RAISE_NON_NORMAL_ERROR(&ctx, SSL_R_PROTOCOL_IS_SHUTDOWN, NULL);
+        return ret;
     }
 
     if (!quic_validate_for_write(ctx.xso, &err)) {
+        ret = QUIC_RAISE_NON_NORMAL_ERROR(&ctx, err, NULL);
         qctx_unlock(&ctx);
-        return QUIC_RAISE_NON_NORMAL_ERROR(&ctx, err, NULL);
+        return ret;
     }
 
     if (ossl_quic_sstream_get_final_size(qs->sstream, NULL)) {
@@ -4148,7 +4151,7 @@ static int quic_get_stream_error_code(SSL *ssl, int is_write,
     if (!expect_quic_with_stream_lock(ssl, /*remote_init=*/-1, /*io=*/0, &ctx))
         return -1;
 
-    quic_classify_stream(ctx.qc, ctx.xso->stream, /*is_write=*/0,
+    quic_classify_stream(ctx.qc, ctx.xso->stream, is_write,
                          &state, app_error_code);
 
     qctx_unlock(&ctx);
@@ -4726,7 +4729,6 @@ static QUIC_CONNECTION *create_qc_from_incoming_conn(QUIC_LISTENER *ql, QUIC_CHA
         goto err;
     }
 
-    ossl_quic_channel_get_peer_addr(ch, &qc->init_peer_addr); /* best effort */
     qc->pending                 = 1;
     qc->engine                  = ql->engine;
     qc->port                    = ql->port;
@@ -4994,6 +4996,22 @@ size_t ossl_quic_get_accept_connection_queue_len(SSL *ssl)
     ret = (int)ossl_quic_port_get_num_incoming_channels(ctx.ql->port);
 
     qctx_unlock(&ctx);
+    return ret;
+}
+
+QUIC_TAKES_LOCK
+int ossl_quic_get_peer_addr(SSL *ssl, BIO_ADDR *peer_addr)
+{
+    QCTX ctx;
+    int ret;
+
+    if (!expect_quic_cs(ssl, &ctx))
+        return 0;
+
+    qctx_lock(&ctx);
+    ret = ossl_quic_channel_get_peer_addr(ctx.qc->ch, peer_addr);
+    qctx_unlock(&ctx);
+
     return ret;
 }
 

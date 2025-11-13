@@ -10,6 +10,24 @@
 #define TESTUTIL_NO_size_t_COMPARISON
 
 #include <inttypes.h>
+#if defined(__TANDEM) && defined(__H_Series_RVU)
+/* Restrict this block to NonStop J-series (Itanium) only. */
+# if defined(__LP64)
+#  define PRIdPTR                  "lld"
+#  define PRIiPTR                  "lli"
+#  define PRIoPTR                  "llo"
+#  define PRIuPTR                  "llu"
+#  define PRIxPTR                  "llx"
+#  define PRIXPTR                  "llX"
+# else
+#  define PRIdPTR                  "d"
+#  define PRIiPTR                  "i"
+#  define PRIoPTR                  "o"
+#  define PRIuPTR                  "u"
+#  define PRIxPTR                  "x"
+#  define PRIXPTR                  "X"
+# endif
+#endif
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -198,14 +216,14 @@ static const struct int_data {
       .skip_libc_ret_check = true, .exp_ret = -1 },
     { { .i = 0x1337 }, AT_INT, "|%2147483639.x|",
       "|                                                              ",
-      .skip_libc_ret_check = true, .exp_ret = -1 },
+      .skip_libc_check = true, .exp_ret = -1 },
 #if !defined(OPENSSL_SYS_WINDOWS)
     /*
      * those test crash on x86 windows built by VS-2019
      */
     { { .i = 0x1337 }, AT_INT, "|%.2147483639x|",
       "|00000000000000000000000000000000000000000000000000000000000000",
-      .skip_libc_ret_check = true, .exp_ret = -1 },
+      .skip_libc_check = true, .exp_ret = -1 },
     /*
      * We treat the following three format strings as errneous and bail out
      * mid-string.
@@ -541,7 +559,7 @@ static int test_n(int i)
         ptrdiff_t t;
     } n = { 0 };
 
-#if defined(OPENSSL_SYS_WINDOWS)
+#if defined(OPENSSL_SYS_WINDOWS) && !defined(__MINGW32__)
     /*
      * MS CRT is special and throws an exception when %n is used even
      * in non-*_s versions of printf routines, and there is a special function
@@ -551,6 +569,7 @@ static int test_n(int i)
     if (_get_printf_count_output() == 0) {
         TEST_note("Can't enable %%n handling for snprintf"
                   ", skipping the checks against libc");
+        return 1;
     }
 #elif defined(__OpenBSD__)
     {

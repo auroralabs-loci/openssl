@@ -1405,7 +1405,7 @@ CON_FUNC_RETURN dtls_construct_hello_verify_request(SSL_CONNECTION *s,
     if (sctx->app_gen_cookie_cb == NULL
         || sctx->app_gen_cookie_cb(SSL_CONNECTION_GET_USER_SSL(s), s->d1->cookie,
                                    &cookie_leni) == 0
-        || cookie_leni > DTLS1_COOKIE_LENGTH) {
+        || cookie_leni > sizeof(s->d1->cookie)) {
         SSLfatal(s, SSL_AD_NO_ALERT, SSL_R_COOKIE_GEN_CALLBACK_FAILURE);
         return CON_FUNC_ERROR;
     }
@@ -1633,7 +1633,7 @@ MSG_PROCESS_RETURN tls_process_client_hello(SSL_CONNECTION *s, PACKET *pkt)
                 goto err;
             }
             if (!PACKET_copy_all(&cookie, clienthello->dtls_cookie,
-                                 DTLS1_COOKIE_LENGTH,
+                                 sizeof(clienthello->dtls_cookie),
                                  &clienthello->dtls_cookie_len)) {
                 SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
                 goto err;
@@ -2767,8 +2767,7 @@ CON_FUNC_RETURN tls_construct_server_key_exchange(SSL_CONNECTION *s,
          * point itself
          */
         if (!WPACKET_put_bytes_u8(pkt, NAMED_CURVE_TYPE)
-                || !WPACKET_put_bytes_u8(pkt, 0)
-                || !WPACKET_put_bytes_u8(pkt, curve_id)
+                || !WPACKET_put_bytes_u16(pkt, curve_id)
                 || !WPACKET_sub_memcpy_u8(pkt, encodedPoint, encodedlen)) {
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
             goto err;

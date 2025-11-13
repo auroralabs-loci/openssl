@@ -429,91 +429,6 @@ static int test_version(void)
 }
 
 #if defined(DO_SSL_TRACE_TEST)
-static void strip_line_ends(char *str)
-{
-    size_t i;
-
-    for (i = strlen(str);
-         i > 0 && (str[i - 1] == '\n' || str[i - 1] == '\r');
-         i--);
-
-    str[i] = '\0';
-}
-
-static int compare_with_file(BIO *membio)
-{
-    BIO *file = NULL, *newfile = NULL;
-    char buf1[8192], buf2[8192];
-    char *reffile;
-    int ret = 0;
-    size_t i;
-
-#ifdef OPENSSL_NO_ZLIB
-    reffile = test_mk_file_path(datadir, "ssltraceref.txt");
-#else
-    reffile = test_mk_file_path(datadir, "ssltraceref-zlib.txt");
-#endif
-    if (!TEST_ptr(reffile))
-        goto err;
-
-    file = BIO_new_file(reffile, "rb");
-    if (!TEST_ptr(file))
-        goto err;
-
-    newfile = BIO_new_file("ssltraceref-new.txt", "wb");
-    if (!TEST_ptr(newfile))
-        goto err;
-
-    while (BIO_gets(membio, buf2, sizeof(buf2)) > 0)
-        if (BIO_puts(newfile, buf2) <= 0) {
-            TEST_error("Failed writing new file data");
-            goto err;
-        }
-
-    if (!TEST_int_ge(BIO_seek(membio, 0), 0))
-        goto err;
-
-    while (BIO_gets(file, buf1, sizeof(buf1)) > 0) {
-        size_t line_len;
-
-        if (BIO_gets(membio, buf2, sizeof(buf2)) <= 0) {
-            TEST_error("Failed reading mem data");
-            goto err;
-        }
-        strip_line_ends(buf1);
-        strip_line_ends(buf2);
-        line_len = strlen(buf1);
-        if (line_len > 0 && buf1[line_len - 1] == '?') {
-            /* Wildcard at the EOL means ignore anything after it */
-            if (strlen(buf2) > line_len)
-                buf2[line_len] = '\0';
-        }
-        if (line_len != strlen(buf2)) {
-            TEST_error("Actual and ref line data length mismatch");
-            TEST_info("%s", buf1);
-            TEST_info("%s", buf2);
-           goto err;
-        }
-        for (i = 0; i < line_len; i++) {
-            /* '?' is a wild card character in the reference text */
-            if (buf1[i] == '?')
-                buf2[i] = '?';
-        }
-        if (!TEST_str_eq(buf1, buf2))
-            goto err;
-    }
-    if (!TEST_true(BIO_eof(file))
-            || !TEST_true(BIO_eof(membio)))
-        goto err;
-
-    ret = 1;
- err:
-    OPENSSL_free(reffile);
-    BIO_free(file);
-    BIO_free(newfile);
-    return ret;
-}
-
 /*
  * Tests that the SSL_trace() msg_callback works as expected with a QUIC
  * connection. This also provides testing of the msg_callback at the same time.
@@ -525,6 +440,7 @@ static int test_ssl_trace(void)
     QUIC_TSERVER *qtserv = NULL;
     int testresult = 0;
     BIO *bio = NULL;
+    char *reffile = NULL;
 
     if (!TEST_ptr(cctx = SSL_CTX_new_ex(libctx, NULL, OSSL_QUIC_client_method()))
             || !TEST_ptr(bio = BIO_new(BIO_s_mem()))
@@ -548,7 +464,13 @@ static int test_ssl_trace(void)
         if (!TEST_int_gt(BIO_pending(bio), 0))
             goto err;
     } else {
-        if (!TEST_true(compare_with_file(bio)))
+
+# ifdef OPENSSL_NO_ZLIB
+        reffile = test_mk_file_path(datadir, "ssltraceref.txt");
+# else
+        reffile = test_mk_file_path(datadir, "ssltraceref-zlib.txt");
+# endif
+        if (!TEST_true(compare_with_reference_file(bio, reffile)))
             goto err;
     }
 
@@ -558,6 +480,7 @@ static int test_ssl_trace(void)
     SSL_free(clientquic);
     SSL_CTX_free(cctx);
     BIO_free(bio);
+    OPENSSL_free(reffile);
 
     return testresult;
 }
@@ -3075,6 +2998,187 @@ err:
 #endif
 }
 
+/* family = AF_INET (alen=4) or AF_INET6 (alen=16) */
+static int create_quic_ssl_objects_seed_peer(SSL_CTX *sctx, SSL_CTX *cctx,
+                                             SSL **lssl, SSL **cssl,
+                                             int family,
+                                             const unsigned char *srv_ip, uint16_t srv_port,
+                                             const unsigned char *cli_ip, uint16_t cli_port)
+{
+    BIO *cbio = NULL, *sbio = NULL;
+    BIO_ADDR *srv_local = NULL, *cli_local = NULL;
+    BIO_ADDR *srv_peer  = NULL, *srv_peer2 = NULL;
+    size_t alen = (family == AF_INET) ? 4 : 16;
+    int ret = 0;
+
+    *cssl = *lssl = NULL;
+
+    if (!TEST_true(BIO_new_bio_dgram_pair(&cbio, 0, &sbio, 0)))
+        goto err;
+
+    /* server local bind (in-memory dgram pair metadata) */
+    if (!TEST_ptr(srv_local = BIO_ADDR_new())
+        || !TEST_true(BIO_ADDR_rawmake(srv_local, family, srv_ip, alen, htons(srv_port)))
+        || !TEST_true(bio_addr_bind(sbio, srv_local)))
+        goto err;
+    srv_local = NULL; /* set0 consumed */
+
+    /* seed peer on the BIO we give the listener (so port's net BIO sees it) */
+    if (!TEST_ptr(srv_peer = BIO_ADDR_new())
+        || !TEST_true(BIO_ADDR_rawmake(srv_peer, family, cli_ip, alen, htons(cli_port))))
+        goto err;
+    (void)BIO_ctrl(sbio, BIO_CTRL_DGRAM_SET_PEER, 0, srv_peer);
+    BIO_ADDR_free(srv_peer);
+    srv_peer = NULL;
+
+    /* create listener */
+    if (!TEST_ptr(*lssl = ql_create(sctx, sbio)))
+        goto err;
+    sbio = NULL;
+
+    /* also seed on the listener's current wbio (covers wrapping) */
+    if (!TEST_ptr(srv_peer2 = BIO_ADDR_new())
+        || !TEST_true(BIO_ADDR_rawmake(srv_peer2, family, cli_ip, alen, htons(cli_port))))
+        goto err;
+    (void)BIO_ctrl(SSL_get_wbio(*lssl), BIO_CTRL_DGRAM_SET_PEER, 0, srv_peer2);
+    BIO_ADDR_free(srv_peer2);
+    srv_peer2 = NULL;
+
+    /* client object + local bind */
+    if (!TEST_ptr(*cssl = SSL_new(cctx)))
+        goto err;
+
+    if (!TEST_ptr(cli_local = BIO_ADDR_new())
+        || !TEST_true(BIO_ADDR_rawmake(cli_local, family, cli_ip, alen, htons(cli_port)))
+        || !TEST_true(bio_addr_bind(cbio, cli_local)))
+        goto err;
+    cli_local = NULL; /* consumed */
+
+    /* qc_init needs server addr (fresh copy) */
+    if (!TEST_ptr(srv_peer = BIO_ADDR_new())
+        || !TEST_true(BIO_ADDR_rawmake(srv_peer, family, srv_ip, alen, htons(srv_port)))
+        || !TEST_true(qc_init(*cssl, srv_peer)))
+        goto err;
+    BIO_ADDR_free(srv_peer);
+    srv_peer = NULL;
+
+    SSL_set_bio(*cssl, cbio, cbio);
+    cbio = NULL;
+
+    ret = 1;
+
+err:
+    if (!ret) {
+        SSL_free(*cssl);
+        SSL_free(*lssl);
+        *cssl = *lssl = NULL;
+    }
+    BIO_free(cbio);
+    BIO_free(sbio);
+    BIO_ADDR_free(srv_local);
+    BIO_ADDR_free(cli_local);
+    BIO_ADDR_free(srv_peer);
+    BIO_ADDR_free(srv_peer2);
+
+    return ret;
+}
+
+/* Parameterized test: family=AF_INET/AF_INET6, e.g. "127.0.0.1" / "::1" */
+static int test_quic_peer_addr_common(int family,
+                                      const char *srv_str, uint16_t srv_port,
+                                      const char *cli_str, uint16_t cli_port)
+{
+    SSL_CTX *sctx = NULL, *cctx = NULL;
+    SSL *qlistener = NULL, *clientssl = NULL, *serverssl = NULL;
+    BIO_ADDR *got = NULL;
+    unsigned char srv_ip[16], cli_ip[16], raw[16];
+    size_t alen = (family == AF_INET) ? 4 : 16, rawlen = 0;
+    int ret, ok = 0;
+
+#if defined(_WIN32)
+    /* OpenSSL's tests usually call BIO_sock_init() elsewhere; safe to call here too */
+    BIO_sock_init();
+#endif
+
+    if (!TEST_int_eq(inet_pton(family, srv_str, srv_ip), 1)
+        || !TEST_int_eq(inet_pton(family, cli_str, cli_ip), 1))
+        goto err;
+
+    if (!TEST_ptr(sctx = create_server_ctx())
+        || !TEST_ptr(cctx = create_client_ctx()))
+        goto err;
+
+    if (!TEST_true(create_quic_ssl_objects_seed_peer(sctx, cctx,
+                                                     &qlistener, &clientssl,
+                                                     family,
+                                                     srv_ip, srv_port,
+                                                     cli_ip, cli_port)))
+        goto err;
+
+    /* Minimal QUIC progress */
+    ret = SSL_connect(clientssl);
+    if (!TEST_true(ret <= 0))
+        goto err;
+    SSL_handle_events(qlistener);
+
+    ret = SSL_connect(clientssl);
+    if (!TEST_true(ret <= 0))
+        goto err;
+    SSL_handle_events(qlistener);
+
+    /* Accept connection (pre-handshake) */
+    if (!TEST_ptr(serverssl = SSL_accept_connection(qlistener, 0)))
+        goto err;
+
+    /* Server sees client */
+    if (!TEST_ptr(got = BIO_ADDR_new()))
+        goto err;
+    BIO_ADDR_clear(got);
+
+    if (!TEST_int_eq(SSL_get_peer_addr(serverssl, got), 1)
+        || !TEST_int_eq(BIO_ADDR_family(got), family)
+        || !TEST_true(BIO_ADDR_rawaddress(got, raw, &rawlen))
+        || !TEST_size_t_eq(rawlen, alen)
+        || !TEST_mem_eq(raw, rawlen, cli_ip, alen)
+        || !TEST_int_eq((int)ntohs(BIO_ADDR_rawport(got)), (int)cli_port))
+        goto err;
+
+    /* Client sees server */
+    BIO_ADDR_clear(got);
+    if (!TEST_int_eq(SSL_get_peer_addr(clientssl, got), 1)
+        || !TEST_int_eq(BIO_ADDR_family(got), family)
+        || !TEST_true(BIO_ADDR_rawaddress(got, raw, &rawlen))
+        || !TEST_size_t_eq(rawlen, alen)
+        || !TEST_mem_eq(raw, rawlen, srv_ip, alen)
+        || !TEST_int_eq((int)ntohs(BIO_ADDR_rawport(got)), (int)srv_port))
+        goto err;
+
+    ok = 1;
+
+err:
+    BIO_ADDR_free(got);
+    SSL_free(serverssl);
+    SSL_free(clientssl);
+    SSL_free(qlistener);
+    SSL_CTX_free(cctx);
+    SSL_CTX_free(sctx);
+    return ok;
+}
+
+static int test_quic_peer_addr_v4(void)
+{
+    return test_quic_peer_addr_common(AF_INET,
+                                      "127.0.0.1", 4433,
+                                      "127.0.0.2", 4434);
+}
+
+static int test_quic_peer_addr_v6(void)
+{
+    return test_quic_peer_addr_common(AF_INET6,
+                                      "::1", 4433,
+                                      "::2", 4434);
+}
+
 /***********************************************************************************/
 OPT_TEST_DECLARE_USAGE("provider config certsdir datadir\n")
 
@@ -3178,6 +3282,9 @@ int setup_tests(void)
     ADD_TEST(test_ssl_set_verify);
     ADD_TEST(test_accept_stream);
     ADD_TEST(test_client_hello_retry);
+    ADD_TEST(test_quic_peer_addr_v6);
+    ADD_TEST(test_quic_peer_addr_v4);
+
     return 1;
  err:
     cleanup_tests();

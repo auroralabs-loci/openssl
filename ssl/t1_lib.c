@@ -371,6 +371,15 @@ int ssl_load_groups(SSL_CTX *ctx)
     return SSL_CTX_set1_groups_list(ctx, TLS_DEFAULT_GROUP_LIST);
 }
 
+static const char *inferred_keytype(const TLS_SIGALG_INFO *sinf)
+{
+    return (sinf->keytype != NULL
+            ? sinf->keytype
+            : (sinf->sig_name != NULL
+               ? sinf->sig_name
+               : sinf->sigalg_name));
+}
+
 #define TLS_SIGALG_LIST_MALLOC_BLOCK_SIZE        10
 static OSSL_CALLBACK add_provider_sigalgs;
 static int add_provider_sigalgs(const OSSL_PARAM params[], void *data)
@@ -587,11 +596,7 @@ static int add_provider_sigalgs(const OSSL_PARAM params[], void *data)
      */
     ret = 1;
     ERR_set_mark();
-    keytype = (sinf->keytype != NULL
-               ? sinf->keytype
-               : (sinf->sig_name != NULL
-                  ? sinf->sig_name
-                  : sinf->sigalg_name));
+    keytype = inferred_keytype(sinf);
     keymgmt = EVP_KEYMGMT_fetch(ctx->libctx, keytype, ctx->propq);
     if (keymgmt != NULL) {
         /*
@@ -692,7 +697,8 @@ int ssl_load_sigalgs(SSL_CTX *ctx)
         if (ctx->ssl_cert_info == NULL)
             return 0;
         for(i = 0; i < ctx->sigalg_list_len; i++) {
-            ctx->ssl_cert_info[i].nid = OBJ_txt2nid(ctx->sigalg_list[i].sigalg_name);
+            const char *keytype = inferred_keytype(&ctx->sigalg_list[i]);
+            ctx->ssl_cert_info[i].pkey_nid = OBJ_txt2nid(keytype);
             ctx->ssl_cert_info[i].amask = SSL_aANY;
         }
     }
@@ -1583,10 +1589,10 @@ static int tuple_cb(const char *tuple, int len, void *arg)
 /*
  * Set groups and prepare generation of keyshares based on a string of groupnames,
  * names separated by the group or the tuple delimiter, with per-group prefixes to
- * (1) add a key share for this group, (2) ignore the group if unkown to the current
+ * (1) add a key share for this group, (2) ignore the group if unknown to the current
  * context, (3) delete a previous occurrence of the group in the current tuple.
  *
- * The list parsing is done in two hierachical steps: The top-level step extracts the
+ * The list parsing is done in two hierarchical steps: The top-level step extracts the
  * string of a tuple using tuple_cb, while the next lower step uses gid_cb to
  * parse and process the groups inside a tuple
  */
@@ -1646,7 +1652,7 @@ int tls1_set_groups_list(SSL_CTX *ctx,
     }
 
     /*
-     * We check whether a tuple was completly emptied by using "-" prefix
+     * We check whether a tuple was completely emptied by using "-" prefix
      * excessively, in which case we remove the tuple
      */
     for (i = j = 0; j < gcb.tplcnt; j++) {
@@ -1693,7 +1699,7 @@ int tls1_set_groups_list(SSL_CTX *ctx,
 
     /*
      * tuple_cb and gid_cb combo ensures there are no duplicates or unknown groups so we
-     * can just go ahead and set the results (after diposing the existing)
+     * can just go ahead and set the results (after disposing the existing)
      */
     OPENSSL_free(*grpext);
     *grpext = gcb.gid_arr;
@@ -2727,9 +2733,17 @@ int tls12_check_peer_sigalg(SSL_CONNECTION *s, uint16_t sig, EVP_PKEY *pkey)
         return 0;
     }
 
-    /* if this sigalg is loaded, set so far unknown pkeyid to its sig NID */
-    if (pkeyid == EVP_PKEY_KEYMGMT)
-        pkeyid = lu->sig;
+    /* If we don't know the pkey nid yet go and find it */
+    if (pkeyid == EVP_PKEY_KEYMGMT) {
+        const SSL_CERT_LOOKUP *scl =
+            ssl_cert_lookup_by_pkey(pkey, NULL, SSL_CONNECTION_GET_CTX(s));
+
+        if (scl == NULL) {
+            SSLfatal(s, SSL_AD_ILLEGAL_PARAMETER, SSL_R_WRONG_SIGNATURE_TYPE);
+            return 0;
+        }
+        pkeyid = scl->pkey_nid;
+    }
 
     /* Should never happen */
     if (pkeyid == -1) {
@@ -4467,7 +4481,7 @@ static int tls12_get_cert_sigalg_idx(const SSL_CONNECTION *s,
     /* If not recognised or not supported by cipher mask it is not suitable */
     if (clu == NULL
             || (clu->amask & s->s3.tmp.new_cipher->algorithm_auth) == 0
-            || (clu->nid == EVP_PKEY_RSA_PSS
+            || (clu->pkey_nid == EVP_PKEY_RSA_PSS
                 && (s->s3.tmp.new_cipher->algorithm_mkey & SSL_kRSA) != 0))
         return -1;
 

@@ -1357,7 +1357,7 @@ static int fix_rsa_padding_mode(enum state state,
         if (i == OSSL_NELEM(str_value_map)) {
             ERR_raise_data(ERR_LIB_RSA, RSA_R_UNKNOWN_PADDING_TYPE,
                            "[action:%d, state:%d] padding name %s",
-                           ctx->action_type, state, ctx->p1);
+                           ctx->action_type, state, (const char *)ctx->p2);
             ctx->p1 = ret = -2;
         } else if (state == POST_CTRL_TO_PARAMS) {
             /* EVP_PKEY_CTRL_GET_RSA_PADDING weirdness explained further up */
@@ -2878,7 +2878,7 @@ static int evp_pkey_ctx_setget_params_to_ctrl(EVP_PKEY_CTX *pctx,
          * function to put it to good use, or maybe affect it.
          *
          * NOTE: even though EVP_PKEY_CTX_ctrl return value is documented
-         * as return positive on Success and 0 or negative on falure. There
+         * as return positive on Success and 0 or negative on failure. There
          * maybe parameters (e.g. ecdh_cofactor), which actually return 0
          * as success value. That is why we do POST_PARAMS_TO_CTRL for 0
          * value as well

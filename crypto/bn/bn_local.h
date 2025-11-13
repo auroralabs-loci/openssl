@@ -10,20 +10,10 @@
 #ifndef OSSL_CRYPTO_BN_LOCAL_H
 # define OSSL_CRYPTO_BN_LOCAL_H
 
-/*
- * The EDK2 build doesn't use bn_conf.h; it sets THIRTY_TWO_BIT or
- * SIXTY_FOUR_BIT in its own environment since it doesn't re-run our
- * Configure script and needs to support both 32-bit and 64-bit.
- */
 # include <openssl/opensslconf.h>
-
-# if !defined(OPENSSL_SYS_UEFI)
-#  include "crypto/bn_conf.h"
-# endif
-
-# include "crypto/bn.h"
 # include "internal/cryptlib.h"
 # include "internal/numbers.h"
+# include "crypto/bn.h"
 
 /*
  * These preprocessor symbols control various aspects of the bignum headers
@@ -168,6 +158,10 @@
  */
 
 # ifdef BN_DEBUG
+
+/* ossl_assert() isn't fit for BN_DEBUG purposes, use assert() instead */
+#  include <assert.h>
+
 /*
  * The new BN_FLG_FIXED_TOP flag marks vectors that were not treated with
  * bn_correct_top, in other words such vectors are permitted to have zeros
@@ -202,9 +196,11 @@
                 const BIGNUM *_bnum2 = (a); \
                 if (_bnum2 != NULL) { \
                         int _top = _bnum2->top; \
-                        (void)ossl_assert((_top == 0 && !_bnum2->neg) || \
-                                  (_top && ((_bnum2->flags & BN_FLG_FIXED_TOP) \
-                                            || _bnum2->d[_top - 1] != 0))); \
+                        if (_top == 0) { \
+                                assert(!_bnum2->neg); \
+                        } else if ((_bnum2->flags & BN_FLG_FIXED_TOP) == 0) { \
+                                assert(_bnum2->d[_top - 1] != 0); \
+                        } \
                         bn_pollute(_bnum2); \
                 } \
         } while(0)

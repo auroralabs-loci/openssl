@@ -31,7 +31,8 @@ IF[{- !$disabled{tests} -}]
           testutil/format_output.c testutil/load.c testutil/fake_random.c \
           testutil/test_cleanup.c testutil/main.c testutil/testutil_init.c \
           testutil/options.c testutil/test_options.c testutil/provider.c \
-          testutil/apps_shims.c testutil/random.c testutil/helper.c $LIBAPPSSRC
+          testutil/apps_shims.c testutil/random.c testutil/helper.c \
+          testutil/compare.c $LIBAPPSSRC
   INCLUDE[libtestutil.a]=../include ../apps/include ..
   DEPEND[libtestutil.a]=../libcrypto
 
@@ -1149,11 +1150,15 @@ IF[{- !$disabled{tests} -}]
   INCLUDE[provider_test]=../include ../apps/include ..
   DEPEND[provider_test]=../libcrypto libtestutil.a
   IF[{- !$disabled{module} -}]
-    MODULES{noinst}=p_test
+    MODULES{noinst}=p_test p_ossltest
     SOURCE[p_test]=p_test.c
+    SOURCE[p_ossltest]=p_ossltest.c ../providers/prov_running.c
     INCLUDE[p_test]=../include ..
+    INCLUDE[p_ossltest]=../include .. ../providers/common/include ../providers/implementations/include ../providers/implementations
+    DEPEND[p_ossltest]=../providers/libcommon.a ../libcrypto
     IF[{- defined $target{shared_defflag} -}]
       SOURCE[p_test]=p_test.ld
+      SOURCE[p_ossltest]=p_test.ld
       GENERATE[p_test.ld]=../util/providers.num
     ENDIF
     MODULES{noinst}=p_minimal

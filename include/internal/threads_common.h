@@ -18,6 +18,8 @@ typedef enum {
     CRYPTO_THREAD_LOCAL_ASYNC_CTX_KEY,
     CRYPTO_THREAD_LOCAL_ASYNC_POOL_KEY,
     CRYPTO_THREAD_LOCAL_TEVENT_KEY,
+    CRYPTO_THREAD_LOCAL_TANDEM_ID_KEY,
+    CRYPTO_THREAD_LOCAL_FIPS_DEFERRED_KEY,
     CRYPTO_THREAD_LOCAL_KEY_MAX
 } CRYPTO_THREAD_LOCAL_KEY_ID;
 
@@ -28,8 +30,6 @@ void *CRYPTO_THREAD_get_local_ex(CRYPTO_THREAD_LOCAL_KEY_ID id,
 int CRYPTO_THREAD_set_local_ex(CRYPTO_THREAD_LOCAL_KEY_ID id,
                                OSSL_LIB_CTX *ctx, void *data);
 
-# ifdef FIPS_MODULE
-void CRYPTO_THREAD_clean_local_for_fips(void);
-# endif
+void CRYPTO_THREAD_clean_local(void);
 
 #endif

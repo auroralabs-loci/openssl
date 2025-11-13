@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   alpine:
+    if: github.repository == 'openssl/openssl'
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +36,9 @@ jobs:
     steps:
     - name: install packages
       run: apk --no-cache add build-base perl linux-headers ${{ matrix.cc }}
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: config
       run: |
         ./config --strict-warnings --banner=Configured no-shared enable-fips \
@@ -52,6 +55,7 @@ jobs:
       run: make test HARNESS_JOBS=${HARNESS_JOBS:-4}
 
   linux:
+    if: github.repository == 'openssl/openssl'
     strategy:
       fail-fast: false
       matrix:
@@ -84,7 +88,9 @@ jobs:
     runs-on: ubuntu-latest
     container: ${{ matrix.zoo.image }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: install packages
       run: ${{ matrix.zoo.install }}
     - name: config
@@ -101,17 +107,20 @@ jobs:
       run: make test HARNESS_JOBS=${HARNESS_JOBS:-4}
 
   macos:
+    if: github.repository == 'openssl/openssl'
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-13, macos-14, macos-15]
+        os: [macos-14, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: checkout fuzz/corpora submodule
       run: git submodule update --init --depth 1 fuzz/corpora
     - name: config
-      run: ./config --strict-warnings --banner=Configured enable-fips
+      run: ./config --strict-warnings --banner=Configured enable-fips enable-demos enable-h3demo
     - name: config dump
       run: ./configdata.pm --dump
     - name: make
@@ -124,6 +133,7 @@ jobs:
       run: make test HARNESS_JOBS=${HARNESS_JOBS:-4}
 
   windows:
+    if: github.repository == 'openssl/openssl'
     strategy:
       fail-fast: false
       matrix:
@@ -134,7 +144,9 @@ jobs:
             vcvars: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat
     runs-on: ${{ matrix.platform.os }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: checkout fuzz/corpora submodule
       run: git submodule update --init --depth 1 fuzz/corpora
     - name: install nasm
@@ -174,10 +186,11 @@ jobs:
         nmake test VERBOSE_FAILURE=yes HARNESS_JOBS=4
 
   linux-arm64:
-    runs-on: linux-arm64
-    if: github.repository == 'openssl/openssl'
+    runs-on: ubuntu-24.04-arm
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: config
       run: ./config --strict-warnings enable-fips enable-ec_nistp_64_gcc_128 enable-md2 enable-rc5 enable-ssl3 enable-ssl3-method enable-trace
     - name: config dump
@@ -193,7 +206,9 @@ jobs:
     runs-on: linux-ppc64le
     if: github.repository == 'openssl/openssl'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: config
       run: ./config --strict-warnings enable-fips enable-ec_nistp_64_gcc_128 enable-md2 enable-rc5 enable-ssl3 enable-ssl3-method enable-trace
     - name: config dump
@@ -211,7 +226,9 @@ jobs:
     runs-on: linux-s390x
     if: github.repository == 'openssl/openssl'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: config
       run: ./config --strict-warnings enable-fips enable-md2 enable-rc5 enable-ssl3 enable-ssl3-method enable-trace
     - name: config dump
@@ -229,7 +246,9 @@ jobs:
     runs-on: linux-riscv64
     if: github.repository == 'openssl/openssl'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: config
       run: ./config enable-fips enable-ec_nistp_64_gcc_128 enable-md2 enable-rc5 enable-ssl3 enable-ssl3-method enable-trace
     - name: config dump
@@ -240,13 +259,16 @@ jobs:
       run: ./util/opensslwrap.sh version -c
     - name: make test
       env:
-        OPENSSL_riscvcap: ZBA_ZBB_ZBC_ZBS_ZKT
+        OPENSSL_riscvcap: RV64GC_ZBA_ZBB_ZBC_ZBS_ZKT_V
       run: make test HARNESS_JOBS=${HARNESS_JOBS:-4}
 
   freebsd-x86_64:
     runs-on: ubuntu-latest
+    if: github.repository == 'openssl/openssl'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
     - name: config
       uses: cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d #v0.27.0
       with:

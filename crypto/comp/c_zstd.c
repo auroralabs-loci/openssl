@@ -39,8 +39,8 @@ COMP_METHOD *COMP_zstd(void);
 #  error Wrong (i.e. linux) zstd.h included.
 # endif
 
-# if ZSTD_VERSION_MAJOR != 1 && ZSTD_VERSION_MINOR < 4
-#  error Expecting version 1.4 or greater of ZSTD
+# if ZSTD_VERSION_MAJOR != 1 || ZSTD_VERSION_MINOR < 4
+#  error Expecting version 1.4 or greater of ZSTD 1.x
 # endif
 
 # ifndef ZSTD_SHARED
@@ -582,7 +582,11 @@ static int bio_zstd_read(BIO *b, char *out, int outl)
     ZSTD_outBuffer outBuf;
     BIO *next = BIO_next(b);
 
-    if (out == NULL || outl <= 0)
+    if (out == NULL) {
+        ERR_raise(ERR_LIB_COMP, ERR_R_PASSED_NULL_PARAMETER);
+        return -1;
+    }
+    if (outl <= 0)
         return 0;
 
     ctx = BIO_get_data(b);
@@ -591,7 +595,7 @@ static int bio_zstd_read(BIO *b, char *out, int outl)
         ctx->decompress.buffer = OPENSSL_malloc(ctx->decompress.bufsize);
         if (ctx->decompress.buffer == NULL) {
             ERR_raise(ERR_LIB_COMP, ERR_R_MALLOC_FAILURE);
-            return 0;
+            return -1;
         }
         ctx->decompress.inbuf.src = ctx->decompress.buffer;
         ctx->decompress.inbuf.size = 0;
@@ -732,7 +736,7 @@ static int bio_zstd_flush(BIO *b)
         /* Compress some more */
         zret = ZSTD_flushStream(ctx->compress.state, &ctx->compress.outbuf);
         if (ZSTD_isError(zret)) {
-            ERR_raise(ERR_LIB_COMP, COMP_R_ZSTD_DECODE_ERROR);
+            ERR_raise(ERR_LIB_COMP, COMP_R_ZSTD_COMPRESS_ERROR);
             ERR_add_error_data(1, ZSTD_getErrorName(zret));
             return 0;
         }

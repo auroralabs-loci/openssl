@@ -436,7 +436,7 @@ static void get_legacy_md_names(const OBJ_NAME *on, void *arg)
     const EVP_MD *md = (void *)OBJ_NAME_get(on->name, on->type);
 
     if (md != NULL)
-        get_legacy_evp_names(0, EVP_MD_get_type(md), NULL, arg);
+        get_legacy_evp_names(NID_undef, EVP_MD_get_type(md), NULL, arg);
 }
 
 # ifndef OPENSSL_NO_DEPRECATED_3_6
@@ -547,7 +547,7 @@ OSSL_NAMEMAP *ossl_namemap_stored(OSSL_LIB_CTX *libctx)
 OSSL_NAMEMAP *ossl_namemap_new(OSSL_LIB_CTX *libctx)
 {
     OSSL_NAMEMAP *namemap;
-    HT_CONFIG htconf = { NULL, NULL, NULL, NAMEMAP_HT_BUCKETS, 1, 1 };
+    HT_CONFIG htconf = { NULL, NULL, NULL, NAMEMAP_HT_BUCKETS, 1, 1, 0 };
 
     htconf.ctx = libctx;
 

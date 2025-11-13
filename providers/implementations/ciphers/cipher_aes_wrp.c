@@ -17,6 +17,7 @@
 #include "cipher_aes.h"
 #include "prov/providercommon.h"
 #include "prov/implementations.h"
+#include "providers/implementations/ciphers/cipher_aes_wrp.inc"
 
 /* AES wrap with padding has IV length of 4, without padding 8 */
 #define AES_WRAP_PAD_IVLEN   4
@@ -45,7 +46,6 @@ typedef struct prov_aes_wrap_ctx_st {
     aeswrap_fn wrapfn;
 
 } PROV_AES_WRAP_CTX;
-
 
 static void *aes_wrap_newctx(size_t kbits, size_t blkbits,
                              size_t ivbits, unsigned int mode, uint64_t flags)
@@ -260,18 +260,23 @@ static int aes_wrap_cipher(void *vctx,
     return 1;
 }
 
+static const OSSL_PARAM *aes_wrap_settable_ctx_params(ossl_unused void *cctx,
+                                                      ossl_unused void *provctx)
+{
+    return aes_wrap_set_ctx_params_list;
+}
+
 static int aes_wrap_set_ctx_params(void *vctx, const OSSL_PARAM params[])
 {
     PROV_CIPHER_CTX *ctx = (PROV_CIPHER_CTX *)vctx;
-    const OSSL_PARAM *p;
+    struct aes_wrap_set_ctx_params_st p;
     size_t keylen = 0;
 
-    if (ossl_param_is_empty(params))
-        return 1;
+    if (ctx == NULL || !aes_wrap_set_ctx_params_decoder(params, &p))
+        return 0;
 
-    p = OSSL_PARAM_locate_const(params, OSSL_CIPHER_PARAM_KEYLEN);
-    if (p != NULL) {
-        if (!OSSL_PARAM_get_size_t(p, &keylen)) {
+    if (p.keylen != NULL) {
+        if (!OSSL_PARAM_get_size_t(p.keylen, &keylen)) {
             ERR_raise(ERR_LIB_PROV, PROV_R_FAILED_TO_GET_PARAMETER);
             return 0;
         }
@@ -311,12 +316,12 @@ static int aes_wrap_set_ctx_params(void *vctx, const OSSL_PARAM params[])
             (void (*)(void))ossl_cipher_generic_gettable_params },             \
         { OSSL_FUNC_CIPHER_GET_CTX_PARAMS,                                     \
             (void (*)(void))ossl_cipher_generic_get_ctx_params },              \
-        { OSSL_FUNC_CIPHER_SET_CTX_PARAMS,                                     \
-            (void (*)(void))aes_wrap_set_ctx_params },                         \
         { OSSL_FUNC_CIPHER_GETTABLE_CTX_PARAMS,                                \
             (void (*)(void))ossl_cipher_generic_gettable_ctx_params },         \
+        { OSSL_FUNC_CIPHER_SET_CTX_PARAMS,                                     \
+            (void (*)(void))aes_wrap_set_ctx_params },                         \
         { OSSL_FUNC_CIPHER_SETTABLE_CTX_PARAMS,                                \
-            (void (*)(void))ossl_cipher_generic_settable_ctx_params },         \
+            (void (*)(void))aes_wrap_settable_ctx_params },                    \
         OSSL_DISPATCH_END                                                      \
     }
 

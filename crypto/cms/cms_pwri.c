@@ -243,7 +243,7 @@ static int kek_unwrap_key(unsigned char *out, size_t *outlen,
         /* Check byte failure */
         goto err;
     }
-    if (inlen < (size_t)(tmp[0] - 4)) {
+    if (inlen < 4 + (size_t)tmp[0]) {
         /* Invalid length value */
         goto err;
     }
@@ -370,10 +370,10 @@ int ossl_cms_RecipientInfo_pwri_crypt(const CMS_ContentInfo *cms,
 
     /* Finish password based key derivation to setup key in "ctx" */
 
-    if (EVP_PBE_CipherInit_ex(algtmp->algorithm,
-                              (char *)pwri->pass, (int)pwri->passlen,
-                              algtmp->parameter, kekctx, en_de,
-                              cms_ctx->libctx, cms_ctx->propq) < 0) {
+    if (!EVP_PBE_CipherInit_ex(algtmp->algorithm,
+                               (char *)pwri->pass, (int)pwri->passlen,
+                               algtmp->parameter, kekctx, en_de,
+                               cms_ctx->libctx, cms_ctx->propq)) {
         ERR_raise(ERR_LIB_CMS, ERR_R_EVP_LIB);
         goto err;
     }
