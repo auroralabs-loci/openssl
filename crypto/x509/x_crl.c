@@ -85,8 +85,16 @@ static int crl_set_issuers(X509_CRL *crl)
     int i, j;
     GENERAL_NAMES *gens, *gtmp;
     STACK_OF(X509_REVOKED) *revoked;
+    int has_indirect_crl;
 
     revoked = X509_CRL_get_REVOKED(crl);
+
+    /*
+     * Optimization: Check indirectCRL flag once at the beginning instead of
+     * repeatedly in the loop. This avoids redundant pointer dereferences and
+     * conditional checks for every revoked certificate entry.
+     */
+    has_indirect_crl = (crl->idp != NULL && crl->idp->indirectCRL);
 
     gens = NULL;
     for (i = 0; i < sk_X509_REVOKED_num(revoked); i++) {
@@ -109,7 +117,7 @@ static int crl_set_issuers(X509_CRL *crl)
              * Issuing Distribution Point (IDP) extension, as required by
              * RFC 5280 section 5.3.3.
              */
-            if (crl->idp == NULL || !crl->idp->indirectCRL) {
+            if (!has_indirect_crl) {
                 crl->flags |= EXFLAG_INVALID;
                 GENERAL_NAMES_free(gtmp);
                 return 0;
