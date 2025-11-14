@@ -74,11 +74,30 @@ int PKCS12_SAFEBAG_get_bag_nid(const PKCS12_SAFEBAG *bag)
 
 const ASN1_OBJECT *PKCS12_SAFEBAG_get0_bag_type(const PKCS12_SAFEBAG *bag)
 {
+    int btype = PKCS12_SAFEBAG_get_nid(bag);
+
+    if (btype != NID_certBag && btype != NID_crlBag && btype != NID_secretBag)
+        return NULL;
     return bag->value.bag->type;
 }
 
 const ASN1_TYPE *PKCS12_SAFEBAG_get0_bag_obj(const PKCS12_SAFEBAG *bag)
 {
+    int btype, vtype;
+
+    /* Get bag type once and reuse it - avoid redundant OBJ_obj2nid calls */
+    btype = PKCS12_SAFEBAG_get_nid(bag);
+
+    /* Early exit if not a valid bag type */
+    if (btype != NID_certBag && btype != NID_crlBag && btype != NID_secretBag)
+        return NULL;
+
+    /* Get value type directly - avoid calling PKCS12_SAFEBAG_get_bag_nid again */
+    vtype = OBJ_obj2nid(bag->value.bag->type);
+
+    if (vtype == -1 || vtype == NID_x509Certificate || vtype == NID_x509Crl
+        || vtype == NID_sdsiCertificate)
+        return NULL;
     return bag->value.bag->value.other;
 }
 
