@@ -8,6 +8,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include "internal/cryptlib.h"
 #include <openssl/buffer.h>
 #include <openssl/bn.h>
@@ -52,9 +53,8 @@ int X509_REQ_print_ex(BIO *bp, const X509_REQ *x, unsigned long nmflags, unsigne
         printok = 1;
 
     if (!(cflag & X509_FLAG_NO_HEADER)) {
-        if (BIO_write(bp, "Certificate Request:\n", 21) <= 0)
-            goto err;
-        if (BIO_write(bp, "    Data:\n", 10) <= 0)
+        /* Optimization: Combine multiple small writes into single buffer write */
+        if (BIO_write(bp, "Certificate Request:\n    Data:\n", 31) <= 0)
             goto err;
     }
     if (!(cflag & X509_FLAG_NO_VERSION)) {
@@ -73,15 +73,15 @@ int X509_REQ_print_ex(BIO *bp, const X509_REQ *x, unsigned long nmflags, unsigne
         if (X509_NAME_print_ex(bp, X509_REQ_get_subject_name(x),
             nmindent, nmflags) < printok)
             goto err;
+        /* Optimization: Single byte writes are expensive, keep as-is for correctness */
         if (BIO_write(bp, "\n", 1) <= 0)
             goto err;
     }
     if (!(cflag & X509_FLAG_NO_PUBKEY)) {
         X509_PUBKEY *xpkey;
         ASN1_OBJECT *koid;
-        if (BIO_write(bp, "        Subject Public Key Info:\n", 33) <= 0)
-            goto err;
-        if (BIO_printf(bp, "%12sPublic Key Algorithm: ", "") <= 0)
+        /* Optimization: Combine consecutive string writes to reduce BIO_write calls */
+        if (BIO_write(bp, "        Subject Public Key Info:\n            Public Key Algorithm: ", 56) <= 0)
             goto err;
         xpkey = X509_REQ_get_X509_PUBKEY(x);
         X509_PUBKEY_get0_param(&koid, NULL, NULL, NULL, xpkey);
@@ -135,11 +135,23 @@ int X509_REQ_print_ex(BIO *bp, const X509_REQ *x, unsigned long nmflags, unsigne
                     type = at->type;
                     bs = at->value.asn1_string;
                 }
-                for (j = 25 - j; j > 0; j--)
-                    if (BIO_write(bp, " ", 1) != 1)
+                /* Optimization: Use memset approach to avoid loop of single-byte writes */
+                if (j < 25) {
+                    char spaces[26];
+                    int space_count = 25 - j;
+                    if (space_count > 0 && space_count <= 25) {
+                        memset(spaces, ' ', space_count);
+                        spaces[space_count] = ':';
+                        if (BIO_write(bp, spaces, space_count + 1) != space_count + 1)
+                            goto err;
+                    } else {
+                        if (BIO_puts(bp, ":") <= 0)
+                            goto err;
+                    }
+                } else {
+                    if (BIO_puts(bp, ":") <= 0)
                         goto err;
-                if (BIO_puts(bp, ":") <= 0)
-                    goto err;
+                }
                 switch (type) {
                 case V_ASN1_PRINTABLESTRING:
                 case V_ASN1_T61STRING:
