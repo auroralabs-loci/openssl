@@ -46,6 +46,10 @@ OpenSSL 4.0
 
    *Ryan Hooper*
 
+ * Added `OSSL_[ENCODER|DECODER]_CTX_[set|get]_finalized` functions.
+
+   *Igor Ustinov*
+
 OpenSSL 3.6
 -----------
 
