@@ -18,13 +18,21 @@ size_t Poly1305_ctx_size(void)
     return sizeof(struct poly1305_context);
 }
 
-/* pick 32-bit unsigned integer in little endian order */
-static unsigned int U8TOU32(const unsigned char *p)
+/* pick 32-bit unsigned integer in little endian order - optimized for performance */
+static inline unsigned int U8TOU32(const unsigned char *p)
 {
+    u32 result;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    /* On little-endian systems, use direct memory read for better performance */
+    memcpy(&result, p, sizeof(result));
+    return result;
+#else
+    /* Fallback for big-endian or when byte order is unknown */
     return (((unsigned int)(p[0] & 0xff)) |
             ((unsigned int)(p[1] & 0xff) << 8) |
             ((unsigned int)(p[2] & 0xff) << 16) |
             ((unsigned int)(p[3] & 0xff) << 24));
+#endif
 }
 
 /*
@@ -104,9 +112,16 @@ typedef struct {
     u64 r[2];
 } poly1305_internal;
 
-/* pick 32-bit unsigned integer in little endian order */
-static u64 U8TOU64(const unsigned char *p)
+/* pick 64-bit unsigned integer in little endian order - optimized for performance */
+static inline u64 U8TOU64(const unsigned char *p)
 {
+    u64 result;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    /* On little-endian systems, use direct memory read for better performance */
+    memcpy(&result, p, sizeof(result));
+    return result;
+#else
+    /* Fallback for big-endian or when byte order is unknown */
     return (((u64)(p[0] & 0xff)) |
             ((u64)(p[1] & 0xff) << 8) |
             ((u64)(p[2] & 0xff) << 16) |
@@ -115,6 +130,7 @@ static u64 U8TOU64(const unsigned char *p)
             ((u64)(p[5] & 0xff) << 40) |
             ((u64)(p[6] & 0xff) << 48) |
             ((u64)(p[7] & 0xff) << 56));
+#endif
 }
 
 /* store a 32-bit unsigned integer in little endian */
@@ -134,10 +150,8 @@ static void poly1305_init(void *ctx, const unsigned char key[16])
 {
     poly1305_internal *st = (poly1305_internal *) ctx;
 
-    /* h = 0 */
-    st->h[0] = 0;
-    st->h[1] = 0;
-    st->h[2] = 0;
+    /* h = 0 - optimized: use memset for better performance */
+    memset(st->h, 0, sizeof(st->h));
 
     /* r &= 0xffffffc0ffffffc0ffffffc0fffffff */
     st->r[0] = U8TOU64(&key[0]) & 0x0ffffffc0fffffff;
@@ -272,12 +286,8 @@ static void poly1305_init(void *ctx, const unsigned char key[16])
 {
     poly1305_internal *st = (poly1305_internal *) ctx;
 
-    /* h = 0 */
-    st->h[0] = 0;
-    st->h[1] = 0;
-    st->h[2] = 0;
-    st->h[3] = 0;
-    st->h[4] = 0;
+    /* h = 0 - optimized: use memset for better performance */
+    memset(st->h, 0, sizeof(st->h));
 
     /* r &= 0xffffffc0ffffffc0ffffffc0fffffff */
     st->r[0] = U8TOU32(&key[0]) & 0x0fffffff;
