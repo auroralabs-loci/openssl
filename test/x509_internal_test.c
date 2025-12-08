@@ -520,8 +520,8 @@ static int tests_X509_check_crypto(void)
     int test;
 
     test = TEST_ptr((rsa_n_neg = X509_from_strings(kRSAModulusNeg)))
-        && TEST_true(err_chk(ERR_LIB_ASN1, ASN1_R_INVALID_VALUE));
-        //&& TEST_true(err_chk(ERR_LIB_RSA, RSA_R_INVALID_MODULUS));
+        && TEST_true(err_chk(ERR_LIB_ASN1, ASN1_R_INVALID_VALUE))
+        && TEST_true(err_chk(ERR_LIB_RSA, RSA_R_INVALID_MODULUS));
 
     X509_free(rsa_n_neg);
     return test;

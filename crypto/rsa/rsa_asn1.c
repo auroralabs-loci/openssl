@@ -34,6 +34,9 @@ static int rsa_cb(int operation, ASN1_VALUE **pval, const ASN1_ITEM *it,
             return 2;
         return 0;
     } else if (operation == ASN1_OP_FREE_PRE) {
+        if (((RSA *)*pval) != NULL && ((RSA *)*pval)->n == NULL)
+            ERR_raise(ERR_LIB_RSA, RSA_R_INVALID_MODULUS);
+
         RSA_free((RSA *)*pval);
         *pval = NULL;
         return 2;
