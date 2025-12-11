@@ -174,7 +174,9 @@ void bn_set_static_words(BIGNUM *a, const BN_ULONG *words, int size)
      * |const| qualifier omission is compensated by BN_FLG_STATIC_DATA
      * flag, which effectively means "read-only data".
      */
+    a->data = NULL;
     a->d = (BN_ULONG *)words;
+    /* No need to call bn_set_top() in this case */
     a->dmax = a->top = size;
     a->neg = 0;
     a->flags |= BN_FLG_STATIC_DATA;
@@ -188,8 +190,11 @@ int bn_set_words(BIGNUM *a, const BN_ULONG *words, int num_words)
         return 0;
     }
 
+    /* TODO(FIXNUM): In the future, we'll use an OSSL_FN function on a->data */
     memcpy(a->d, words, sizeof(BN_ULONG) * num_words);
-    a->top = num_words;
+
+    /* TODO(FIXNUM): The following two lines are TO BE REMOVED */
+    bn_set_top(a, num_words);
     bn_correct_top(a);
     return 1;
 }
