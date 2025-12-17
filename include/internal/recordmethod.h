@@ -56,6 +56,8 @@ typedef struct ossl_record_layer_st OSSL_RECORD_LAYER;
 struct ossl_record_template_st {
     unsigned char type;
     unsigned int version;
+    uint64_t sequence_number;
+    uint64_t epoch;
     const unsigned char *buf;
     size_t buflen;
 };
@@ -117,12 +119,15 @@ struct ossl_record_method_st {
         uint16_t epoch,
         unsigned char *secret,
         size_t secretlen,
+        unsigned char *snkey,
         unsigned char *key,
         size_t keylen,
         unsigned char *iv,
         size_t ivlen,
         unsigned char *mackey,
         size_t mackeylen,
+        const EVP_CIPHER *snciph,
+        size_t snoffs,
         const EVP_CIPHER *ciph,
         size_t taglen,
         int mactype,
@@ -224,7 +229,7 @@ struct ossl_record_method_st {
      */
     int (*read_record)(OSSL_RECORD_LAYER *rl, void **rechandle, int *rversion,
         uint8_t *type, const unsigned char **data, size_t *datalen,
-        uint16_t *epoch, unsigned char *seq_num);
+        uint16_t *epoch, uint64_t *seq_num);
     /*
      * Release length bytes from a buffer associated with a record previously
      * read with read_record. Once all the bytes from a record are released, the
@@ -305,6 +310,26 @@ struct ossl_record_method_st {
      * Increment the record sequence number
      */
     int (*increment_sequence_ctr)(OSSL_RECORD_LAYER *rl);
+
+    /*
+     * Get the Sequence number
+     */
+    int (*get_sequence)(OSSL_RECORD_LAYER *rl, uint64_t *sequence);
+
+    /*
+     * Set the Sequence number to a specific value
+     */
+    int (*set_sequence)(OSSL_RECORD_LAYER *rl, uint64_t sequence);
+
+    /*
+     * Get the Epoch value
+     */
+    int (*get_epoch)(OSSL_RECORD_LAYER *rl, uint16_t *epoch);
+
+    /*
+     * Set the current MTU length to be used for the record layer.
+     */
+    int (*set_curr_mtu)(OSSL_RECORD_LAYER *rl, size_t curr_mtu);
 
     /*
      * Allocate read or write buffers. Does nothing if already allocated.

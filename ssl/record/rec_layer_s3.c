@@ -82,8 +82,8 @@ int RECORD_LAYER_reset(RECORD_LAYER *rl)
             : TLS_ANY_VERSION,
         OSSL_RECORD_DIRECTION_READ,
         OSSL_RECORD_PROTECTION_LEVEL_NONE, NULL, 0,
-        NULL, 0, NULL, 0, NULL, 0, NULL, 0,
-        NID_undef, NULL, NULL, NULL);
+        NULL, NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL,
+        0, NID_undef, NULL, NULL, NULL);
 
     ret &= ssl_set_new_record_layer(rl->s,
         SSL_CONNECTION_IS_DTLS(rl->s)
@@ -91,8 +91,8 @@ int RECORD_LAYER_reset(RECORD_LAYER *rl)
             : TLS_ANY_VERSION,
         OSSL_RECORD_DIRECTION_WRITE,
         OSSL_RECORD_PROTECTION_LEVEL_NONE, NULL, 0,
-        NULL, 0, NULL, 0, NULL, 0, NULL, 0,
-        NID_undef, NULL, NULL, NULL);
+        NULL, NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL,
+        0, NID_undef, NULL, NULL, NULL);
 
     /* SSLfatal already called in the event of failure */
     return ret;
@@ -1243,9 +1243,11 @@ static int ssl_post_record_layer_select(SSL_CONNECTION *s, int direction)
 int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
     int direction, int level,
     unsigned char *secret, size_t secretlen,
+    unsigned char *snkey,
     unsigned char *key, size_t keylen,
     unsigned char *iv, size_t ivlen,
     unsigned char *mackey, size_t mackeylen,
+    const EVP_CIPHER *snciph, size_t snoffs,
     const EVP_CIPHER *ciph, size_t taglen,
     int mactype, const EVP_MD *md,
     const SSL_COMP *comp, const EVP_MD *kdfdigest)
@@ -1264,6 +1266,8 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
     int use_early_data = 0;
     uint32_t max_early_data;
     COMP_METHOD *compm = (comp == NULL) ? NULL : comp->method;
+    uint16_t epoch_zero;
+    uint64_t seq;
 
     meth = ssl_select_next_record_layer(s, direction, level);
 
@@ -1366,6 +1370,25 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
 
     *set = OSSL_PARAM_construct_end();
 
+    /*
+     * For DTLS save off the sequence number for epoch 0 when we are setting up
+     * a new write record layer. This is needed for handling in case of HRR
+     * and we create a new write record layer for epoch 0.
+     */
+    if (direction == OSSL_RECORD_DIRECTION_WRITE
+        && SSL_CONNECTION_IS_DTLS(s)
+        && s->rlayer.wrl != NULL
+        && meth->get_epoch(s->rlayer.wrl, &epoch_zero) == 1
+        && epoch_zero == 0) {
+        if (meth->get_sequence(s->rlayer.wrl,
+                &seq)
+            != 1) {
+            SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+            return 0;
+        }
+        s->rlayer.wlayer_epoch_zero_sequence = seq;
+    }
+
     for (;;) {
         int rlret;
         BIO *prev = NULL;
@@ -1420,9 +1443,11 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
 
         rlret = meth->new_record_layer(sctx->libctx, sctx->propq, version,
             s->server, direction, level, epoch,
-            secret, secretlen, key, keylen, iv,
-            ivlen, mackey, mackeylen, ciph, taglen,
-            mactype, md, compm, kdfdigest, prev,
+            secret, secretlen, snkey, key, keylen,
+            iv,
+            ivlen, mackey, mackeylen, snciph, snoffs, ciph,
+            taglen, mactype, md, compm, kdfdigest,
+            prev,
             thisbio, next, NULL, NULL, settings,
             options, rlayer_dispatch_tmp, s,
             s->rlayer.rlarg, &newrl);
@@ -1464,8 +1489,26 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
      */
     if (!SSL_CONNECTION_IS_DTLS(s)
         || direction == OSSL_RECORD_DIRECTION_READ
-        || pqueue_peek(s->d1->sent_messages) == NULL) {
+        || pqueue_peek(&s->d1->sent_messages) == NULL) {
         if (*thismethod != NULL && !(*thismethod)->free(*thisrl)) {
+            SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+            return 0;
+        }
+    }
+
+    /*
+     * For DTLS if we created a new write record layer
+     * for epoch zero we need to set the sequence number.
+     * This is needed for handling HRR case.
+     */
+    if (direction == OSSL_RECORD_DIRECTION_WRITE
+        && SSL_CONNECTION_IS_DTLS(s)
+        && meth->get_epoch(newrl, &epoch_zero) == 1
+        && epoch_zero == 0) {
+
+        if (meth->set_sequence(newrl,
+                s->rlayer.wlayer_epoch_zero_sequence)
+            != 1) {
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
             return 0;
         }
@@ -1479,11 +1522,14 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
 
 int ssl_set_record_protocol_version(SSL_CONNECTION *s, int vers)
 {
-    if (!ossl_assert(s->rlayer.rrlmethod != NULL)
-        || !ossl_assert(s->rlayer.wrlmethod != NULL))
+    if ((s->negotiated_version != PROTO_VERSION_UNSET && s->negotiated_version != vers)
+        || !ossl_assert(s->rlayer.rrlmethod != NULL)
+        || !ossl_assert(s->rlayer.wrlmethod != NULL)
+        || !s->rlayer.rrlmethod->set_protocol_version(s->rlayer.rrl, vers)
+        || !s->rlayer.wrlmethod->set_protocol_version(s->rlayer.wrl, vers))
         return 0;
-    s->rlayer.rrlmethod->set_protocol_version(s->rlayer.rrl, s->version);
-    s->rlayer.wrlmethod->set_protocol_version(s->rlayer.wrl, s->version);
+
+    s->negotiated_version = vers;
 
     return 1;
 }

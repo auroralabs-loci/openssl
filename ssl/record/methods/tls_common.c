@@ -39,12 +39,6 @@ static void TLS_RL_RECORD_release(TLS_RL_RECORD *r, size_t num_recs)
     }
 }
 
-void ossl_tls_rl_record_set_seq_num(TLS_RL_RECORD *r,
-    const unsigned char *seq_num)
-{
-    memcpy(r->seq_num, seq_num, SEQ_NUM_SIZE);
-}
-
 void ossl_rlayer_fatal(OSSL_RECORD_LAYER *rl, int al, int reason,
     const char *fmt, ...)
 {
@@ -148,15 +142,13 @@ int tls_setup_write_buffer(OSSL_RECORD_LAYER *rl, size_t numwpipes,
     size_t currpipe;
     size_t defltlen = 0;
     size_t contenttypelen = 0;
+    const int version1_3 = rl->isdtls ? DTLS1_3_VERSION : TLS1_3_VERSION;
 
     if (firstlen == 0 || (numwpipes > 1 && nextlen == 0)) {
-        if (rl->isdtls)
-            headerlen = DTLS1_RT_HEADER_LENGTH + 1;
-        else
-            headerlen = SSL3_RT_HEADER_LENGTH;
+        headerlen = tls_get_record_header_len(rl);
 
-        /* TLSv1.3 adds an extra content type byte after payload data */
-        if (rl->version == TLS1_3_VERSION)
+        /* (D)TLSv1.3 adds an extra content type byte after payload data */
+        if (rl->version == version1_3)
             contenttypelen = 1;
 
 #if defined(SSL3_ALIGN_PAYLOAD) && SSL3_ALIGN_PAYLOAD != 0
@@ -234,10 +226,7 @@ int tls_setup_read_buffer(OSSL_RECORD_LAYER *rl)
 
     b = &rl->rbuf;
 
-    if (rl->isdtls)
-        headerlen = DTLS1_RT_HEADER_LENGTH;
-    else
-        headerlen = SSL3_RT_HEADER_LENGTH;
+    headerlen = tls_get_record_header_len(rl);
 
 #if defined(SSL3_ALIGN_PAYLOAD) && SSL3_ALIGN_PAYLOAD != 0
     maxalign = SSL3_ALIGN_PAYLOAD - 1;
@@ -634,7 +623,7 @@ int tls_get_more_records(OSSL_RECORD_LAYER *rl)
                     || !PACKET_get_net_2(&pkt, &version)
                     || !PACKET_get_net_2_len(&pkt, &thisrr->length)) {
                     if (rl->msg_callback != NULL)
-                        rl->msg_callback(0, 0, SSL3_RT_HEADER, p, 5, rl->cbarg);
+                        rl->msg_callback(0, 0, SSL3_RT_HEADER, p, SSL3_RT_HEADER_LENGTH, rl->cbarg);
                     RLAYERfatal(rl, SSL_AD_DECODE_ERROR, ERR_R_INTERNAL_ERROR);
                     return OSSL_RECORD_RETURN_FATAL;
                 }
@@ -654,7 +643,8 @@ int tls_get_more_records(OSSL_RECORD_LAYER *rl)
                 }
 
                 if (rl->msg_callback != NULL)
-                    rl->msg_callback(0, version, SSL3_RT_HEADER, p, 5, rl->cbarg);
+                    rl->msg_callback(0, version, SSL3_RT_HEADER, p,
+                        SSL3_RT_HEADER_LENGTH, rl->cbarg);
 
                 if (thisrr->length > TLS_BUFFER_get_len(rbuf) - SSL3_RT_HEADER_LENGTH) {
                     RLAYERfatal(rl, SSL_AD_RECORD_OVERFLOW,
@@ -860,7 +850,7 @@ int tls_get_more_records(OSSL_RECORD_LAYER *rl)
             rl->curr_rec = 0;
             rl->num_released = 0;
             /* Reset the read sequence */
-            memset(rl->sequence, 0, sizeof(rl->sequence));
+            rl->sequence = 0;
             ret = 1;
             goto end;
         }
@@ -1088,7 +1078,8 @@ int tls13_common_post_process_record(OSSL_RECORD_LAYER *rl, TLS_RL_RECORD *rec)
 {
     if (rec->type != SSL3_RT_APPLICATION_DATA
         && rec->type != SSL3_RT_ALERT
-        && rec->type != SSL3_RT_HANDSHAKE) {
+        && rec->type != SSL3_RT_HANDSHAKE
+        && (!rl->isdtls || rec->type != SSL3_RT_ACK)) {
         RLAYERfatal(rl, SSL_AD_UNEXPECTED_MESSAGE, SSL_R_BAD_RECORD_TYPE);
         return 0;
     }
@@ -1115,7 +1106,7 @@ int tls13_common_post_process_record(OSSL_RECORD_LAYER *rl, TLS_RL_RECORD *rec)
 
 int tls_read_record(OSSL_RECORD_LAYER *rl, void **rechandle, int *rversion,
     uint8_t *type, const unsigned char **data, size_t *datalen,
-    uint16_t *epoch, unsigned char *seq_num)
+    uint16_t *epoch, uint64_t *seq_num)
 {
     TLS_RL_RECORD *rec;
 
@@ -1152,7 +1143,7 @@ int tls_read_record(OSSL_RECORD_LAYER *rl, void **rechandle, int *rversion,
     *datalen = rec->length;
     if (rl->isdtls) {
         *epoch = rec->epoch;
-        memcpy(seq_num, rec->seq_num, sizeof(rec->seq_num));
+        *seq_num = rec->seq_num;
     }
 
     return OSSL_RECORD_RETURN_SUCCESS;
@@ -1273,6 +1264,8 @@ int tls_int_new_record_layer(OSSL_LIB_CTX *libctx, const char *propq, int vers,
      */
     rl->max_frag_len = SSL3_RT_MAX_PLAIN_LENGTH;
 
+    rl->curr_mtu = 0;
+
     /* Loop through all the settings since they must all be understood */
     if (settings != NULL) {
         for (p = settings; p->key != NULL; p++) {
@@ -1392,8 +1385,10 @@ static int
 tls_new_record_layer(OSSL_LIB_CTX *libctx, const char *propq, int vers,
     int role, int direction, int level, uint16_t epoch,
     unsigned char *secret, size_t secretlen,
-    unsigned char *key, size_t keylen, unsigned char *iv,
-    size_t ivlen, unsigned char *mackey, size_t mackeylen,
+    unsigned char *snkey, unsigned char *key, size_t keylen,
+    unsigned char *iv, size_t ivlen,
+    unsigned char *mackey, size_t mackeylen,
+    const EVP_CIPHER *snciph, size_t snoffs,
     const EVP_CIPHER *ciph, size_t taglen,
     int mactype,
     const EVP_MD *md, COMP_METHOD *comp,
@@ -1435,9 +1430,10 @@ tls_new_record_layer(OSSL_LIB_CTX *libctx, const char *propq, int vers,
         goto err;
     }
 
-    ret = (*retrl)->funcs->set_crypto_state(*retrl, level, key, keylen, iv,
-        ivlen, mackey, mackeylen, ciph,
-        taglen, mactype, md, comp);
+    ret = (*retrl)->funcs->set_crypto_state(*retrl, level, snkey, key, keylen,
+        iv, ivlen, mackey, mackeylen,
+        snciph, snoffs, ciph, taglen, mactype, md,
+        comp);
 
 err:
     if (ret != OSSL_RECORD_RETURN_SUCCESS) {
@@ -1457,6 +1453,7 @@ static void tls_int_free(OSSL_RECORD_LAYER *rl)
     tls_release_write_buffer(rl);
 
     EVP_CIPHER_CTX_free(rl->enc_ctx);
+    EVP_CIPHER_CTX_free(rl->sn_enc_ctx);
     EVP_MAC_CTX_free(rl->mac_ctx);
     EVP_MD_CTX_free(rl->md_ctx);
 #ifndef OPENSSL_NO_COMP
@@ -1564,6 +1561,21 @@ int tls_allocate_write_buffers_default(OSSL_RECORD_LAYER *rl,
     return 1;
 }
 
+size_t tls_get_record_body_alignment_offset(OSSL_RECORD_LAYER *rl,
+    const unsigned char *rec)
+{
+    size_t alignoffset = 0;
+    size_t headersize = tls_get_record_header_len(rl);
+
+#if defined(SSL3_ALIGN_PAYLOAD) && SSL3_ALIGN_PAYLOAD != 0
+    alignoffset = (size_t)rec;
+    alignoffset += headersize;
+    alignoffset = SSL3_ALIGN_PAYLOAD - 1 - ((alignoffset - 1) % SSL3_ALIGN_PAYLOAD);
+#endif
+
+    return alignoffset;
+}
+
 int tls_initialise_write_packets_default(OSSL_RECORD_LAYER *rl,
     OSSL_RECORD_TEMPLATE *templates,
     size_t numtempl,
@@ -1581,13 +1593,7 @@ int tls_initialise_write_packets_default(OSSL_RECORD_LAYER *rl,
         wb = &bufs[j];
 
         wb->type = templates[j].type;
-
-#if defined(SSL3_ALIGN_PAYLOAD) && SSL3_ALIGN_PAYLOAD != 0
-        align = (size_t)TLS_BUFFER_get_buf(wb);
-        align += rl->isdtls ? DTLS1_RT_HEADER_LENGTH : SSL3_RT_HEADER_LENGTH;
-        align = SSL3_ALIGN_PAYLOAD - 1
-            - ((align - 1) % SSL3_ALIGN_PAYLOAD);
-#endif
+        align = tls_get_record_body_alignment_offset(rl, TLS_BUFFER_get_buf(wb));
         TLS_BUFFER_set_offset(wb, align);
 
         if (!WPACKET_init_static_len(thispkt, TLS_BUFFER_get_buf(wb),
@@ -1690,8 +1696,9 @@ int tls_post_encryption_processing_default(OSSL_RECORD_LAYER *rl,
     TLS_RL_RECORD *thiswr)
 {
     size_t origlen, len;
-    size_t headerlen = rl->isdtls ? DTLS1_RT_HEADER_LENGTH
-                                  : SSL3_RT_HEADER_LENGTH;
+    unsigned char *recordstart;
+    size_t rechdrlen;
+    size_t written;
 
     /* Allocate bytes for the encryption overhead */
     if (!WPACKET_get_length(thispkt, &origlen)
@@ -1721,19 +1728,39 @@ int tls_post_encryption_processing_default(OSSL_RECORD_LAYER *rl,
     }
 
     if (!WPACKET_get_length(thispkt, &len)
-        || !WPACKET_close(thispkt)) {
+        || !WPACKET_close(thispkt)
+        || !WPACKET_get_total_written(thispkt, &written)) {
         RLAYERfatal(rl, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
         return 0;
     }
 
+    recordstart = WPACKET_get_curr(thispkt) - written;
+    recordstart += tls_get_record_body_alignment_offset(rl, recordstart);
+
+    if (rl->isdtls)
+        rechdrlen = dtls_get_rec_header_size(*recordstart);
+    else
+        rechdrlen = SSL3_RT_HEADER_LENGTH;
+
+    if (rl->isdtls && DTLS13_UNI_HDR_FIX_BITS_IS_SET(*recordstart)) {
+        size_t seqnumlen = DTLS13_UNI_HDR_SEQ_BIT_IS_SET(*recordstart) ? 2 : 1;
+
+        if (!ossl_assert(DTLS13_UNI_HDR_SEQ_OFF + seqnumlen <= rechdrlen)
+            || !dtls_crypt_sequence_number(rl->sn_enc_ctx, recordstart + DTLS13_UNI_HDR_SEQ_OFF,
+                seqnumlen, recordstart + rechdrlen,
+                rl->sn_enc_offs)) {
+            RLAYERfatal(rl, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+            return 0;
+        }
+    }
+
     if (rl->msg_callback != NULL) {
-        unsigned char *recordstart;
+        const int version1_3 = rl->isdtls ? DTLS1_3_VERSION : TLS1_3_VERSION;
 
-        recordstart = WPACKET_get_curr(thispkt) - len - headerlen;
         rl->msg_callback(1, thiswr->rec_version, SSL3_RT_HEADER, recordstart,
-            headerlen, rl->cbarg);
+            rechdrlen, rl->cbarg);
 
-        if (rl->version == TLS1_3_VERSION && rl->enc_ctx != NULL) {
+        if (rl->version == version1_3 && rl->enc_ctx != NULL) {
             unsigned char ctype = thistempl->type;
 
             rl->msg_callback(1, thiswr->rec_version, SSL3_RT_INNER_CONTENT_TYPE,
@@ -1746,7 +1773,7 @@ int tls_post_encryption_processing_default(OSSL_RECORD_LAYER *rl,
         return 0;
     }
 
-    TLS_RL_RECORD_add_length(thiswr, headerlen);
+    TLS_RL_RECORD_add_length(thiswr, rechdrlen);
 
     return 1;
 }
@@ -2002,6 +2029,22 @@ int tls_set1_bio(OSSL_RECORD_LAYER *rl, BIO *bio)
     return 1;
 }
 
+size_t tls_get_record_header_len(OSSL_RECORD_LAYER *rl)
+{
+    size_t headerlen;
+
+    if (rl->isdtls) {
+        if (rl->version == DTLS1_3_VERSION && rl->epoch > 0)
+            headerlen = DTLS13_UNI_HDR_FIXED_LENGTH;
+        else
+            headerlen = DTLS1_RT_HEADER_LENGTH;
+    } else {
+        headerlen = SSL3_RT_HEADER_LENGTH;
+    }
+
+    return headerlen;
+}
+
 /* Shared by most methods except tlsany_meth */
 int tls_default_set_protocol_version(OSSL_RECORD_LAYER *rl, int version)
 {
@@ -2080,15 +2123,8 @@ void tls_set_max_frag_len(OSSL_RECORD_LAYER *rl, size_t max_frag_len)
 
 int tls_increment_sequence_ctr(OSSL_RECORD_LAYER *rl)
 {
-    int i;
-
     /* Increment the sequence counter */
-    for (i = SEQ_NUM_SIZE; i > 0; i--) {
-        ++(rl->sequence[i - 1]);
-        if (rl->sequence[i - 1] != 0)
-            break;
-    }
-    if (i == 0) {
+    if (++rl->sequence == 0) {
         /* Sequence has wrapped */
         RLAYERfatal(rl, SSL_AD_INTERNAL_ERROR, SSL_R_SEQUENCE_CTR_WRAPPED);
         return 0;
@@ -2183,6 +2219,10 @@ const OSSL_RECORD_METHOD ossl_tls_record_method = {
     tls_set_max_frag_len,
     NULL,
     tls_increment_sequence_ctr,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
     tls_alloc_buffers,
     tls_free_buffers
 };
