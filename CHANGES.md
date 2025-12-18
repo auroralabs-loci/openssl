@@ -32,6 +32,14 @@ OpenSSL 4.0
 
 ### Changes between 3.6 and 4.0 [xx XXX xxxx]
 
+ * libcrypto no longer cleans up globally allocated data on process exit. This data
+   is cleaned up automatically by the OS instead. Some memory leak detectors
+   may report spurious allocated and reachable memory at application exit. To
+   avoid such spurious leak detection reports the application may call
+   OPENSSL_cleanup() before the process exits.
+
+   *Alexandr Nedvedicky*
+
  * The crypto-mdebug-backtrace configuration option has been entirely removed.
    The option has been a no-op since 1.0.2.
 
