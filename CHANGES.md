@@ -38,6 +38,17 @@ OpenSSL 4.0
    with `-noattr` (no signed attributes).
 
    *Jeffrey Kintscher*
+ * The script tool `c_rehash` was removed. Use `openssl rehash` instead.
+
+   *Norbert Pocs*
+
+ * libcrypto no longer cleans up globally allocated data on process exit. This data
+   is cleaned up automatically by the OS instead. Some memory leak detectors
+   may report spurious allocated and reachable memory at application exit. To
+   avoid such spurious leak detection reports the application may call
+   OPENSSL_cleanup() before the process exits.
+
+   *Alexandr Nedvedicky*
 
  * The crypto-mdebug-backtrace configuration option has been entirely removed.
    The option has been a no-op since 1.0.2.
@@ -95,6 +106,11 @@ OpenSSL 4.0
    replace ENGINEs functionality.
 
    *Milan Broz*, *Neil Horman*, *Norbert Pocs*
+
+ * BIO_f_reliable() implementation was removed without replacement.
+   It was broken since 3.0 release without any complaints.
+
+   *Tomáš Mráz*
 
  * Added SNMP KDF (EVP_KDF_SNMPKDF) to EVP_KDF
 
