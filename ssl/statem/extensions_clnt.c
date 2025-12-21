@@ -247,7 +247,7 @@ negotiate_ffdhe(SSL_CONNECTION *s, int min_version, int max_version)
     if (ret == 0)
         return 0;
 
-    /* Check we have at least one EC supported group */
+    /* Check we have at least one FFDHE supported group */
     tls1_get_supported_groups(s, &pgroups, &num_groups);
     for (j = 0; j < num_groups; j++) {
         uint16_t ctmp = pgroups[j];
@@ -255,7 +255,7 @@ negotiate_ffdhe(SSL_CONNECTION *s, int min_version, int max_version)
 
         if (tls_valid_group(s, ctmp, min_version, max_version, NULL, &ginfo)
             && is_ffdhe_group(ginfo)
-            && tls_group_allowed(s, ctmp, SSL_SECOP_CURVE_SUPPORTED))
+            && tls_group_allowed(s, ctmp, SSL_SECOP_TMP_DH))
             return 1;
     }
     return 0;
