@@ -30,13 +30,17 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
+        OPENSSL_add_library_user();
         break;
     case DLL_THREAD_ATTACH:
+        OPENSSL_add_library_user();
         break;
     case DLL_THREAD_DETACH:
         OPENSSL_thread_stop();
+        OPENSSL_cleanup_ex();
         break;
     case DLL_PROCESS_DETACH:
+        OPENSSL_cleanup_ex();
         break;
     }
     return TRUE;
