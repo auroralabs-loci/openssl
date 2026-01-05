@@ -218,7 +218,7 @@ static int test_encode_line_lengths_reinforced(void)
                     if (!TEST_int_eq(ret_simd, ret_ref)
                         || !TEST_mem_eq(out_ref, outlen_ref, out_simd, outlen_simd)
                         || !TEST_int_eq(outlen_simd, outlen_ref))
-                        return 0;
+                        goto fail;
 
                     EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd,
                         &finlen_simd);
@@ -230,7 +230,7 @@ static int test_encode_line_lengths_reinforced(void)
 
                     if (!TEST_int_eq(finlen_simd, finlen_ref)
                         || !TEST_mem_eq(out_ref, total_ref, out_simd, total_simd))
-                        return 0;
+                        goto fail;
                 }
 
                 EVP_ENCODE_CTX_free(ctx_simd);
@@ -240,6 +240,11 @@ static int test_encode_line_lengths_reinforced(void)
     }
 
     return 1;
+
+fail:
+    EVP_ENCODE_CTX_free(ctx_simd);
+    EVP_ENCODE_CTX_free(ctx_ref);
+    return 0;
 }
 
 int setup_tests(void)
