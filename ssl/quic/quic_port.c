@@ -865,7 +865,7 @@ static int port_try_handle_stateless_reset(QUIC_PORT *port, const QUIC_URXE *e)
 
     for (i = 0;; ++i) {
         if (!ossl_quic_srtm_lookup(port->srtm,
-                (QUIC_STATELESS_RESET_TOKEN *)(data + e->data_len
+                (const QUIC_STATELESS_RESET_TOKEN *)(data + e->data_len
                     - sizeof(QUIC_STATELESS_RESET_TOKEN)),
                 i, &opaque, NULL))
             break;
@@ -1058,7 +1058,7 @@ static int decrypt_validation_token(const QUIC_PORT *port,
         || !EVP_DecryptUpdate(port->token_ctx, plaintext, &len, data,
             (int)(ct_len - iv_len - tag_len))
         || !EVP_CIPHER_CTX_ctrl(port->token_ctx, EVP_CTRL_GCM_SET_TAG, tag_len,
-            (void *)tag)
+            CONST_CAST(void *) tag)
         || !EVP_DecryptFinal_ex(port->token_ctx, plaintext + len, &len))
         goto err;
 

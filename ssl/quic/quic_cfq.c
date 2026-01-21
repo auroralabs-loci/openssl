@@ -9,6 +9,7 @@
 
 #include "internal/quic_cfq.h"
 #include "internal/numbers.h"
+#include "internal/common.h"
 
 typedef struct quic_cfq_item_ex_st QUIC_CFQ_ITEM_EX;
 
@@ -26,42 +27,42 @@ struct quic_cfq_item_ex_st {
 
 uint64_t ossl_quic_cfq_item_get_frame_type(const QUIC_CFQ_ITEM *item)
 {
-    QUIC_CFQ_ITEM_EX *ex = (QUIC_CFQ_ITEM_EX *)item;
+    const QUIC_CFQ_ITEM_EX *ex = (const QUIC_CFQ_ITEM_EX *)item;
 
     return ex->frame_type;
 }
 
 const unsigned char *ossl_quic_cfq_item_get_encoded(const QUIC_CFQ_ITEM *item)
 {
-    QUIC_CFQ_ITEM_EX *ex = (QUIC_CFQ_ITEM_EX *)item;
+    const QUIC_CFQ_ITEM_EX *ex = (const QUIC_CFQ_ITEM_EX *)item;
 
     return ex->encoded;
 }
 
 size_t ossl_quic_cfq_item_get_encoded_len(const QUIC_CFQ_ITEM *item)
 {
-    QUIC_CFQ_ITEM_EX *ex = (QUIC_CFQ_ITEM_EX *)item;
+    const QUIC_CFQ_ITEM_EX *ex = (const QUIC_CFQ_ITEM_EX *)item;
 
     return ex->encoded_len;
 }
 
 int ossl_quic_cfq_item_get_state(const QUIC_CFQ_ITEM *item)
 {
-    QUIC_CFQ_ITEM_EX *ex = (QUIC_CFQ_ITEM_EX *)item;
+    const QUIC_CFQ_ITEM_EX *ex = (const QUIC_CFQ_ITEM_EX *)item;
 
     return ex->state;
 }
 
 uint32_t ossl_quic_cfq_item_get_pn_space(const QUIC_CFQ_ITEM *item)
 {
-    QUIC_CFQ_ITEM_EX *ex = (QUIC_CFQ_ITEM_EX *)item;
+    const QUIC_CFQ_ITEM_EX *ex = (const QUIC_CFQ_ITEM_EX *)item;
 
     return ex->pn_space;
 }
 
 int ossl_quic_cfq_item_is_unreliable(const QUIC_CFQ_ITEM *item)
 {
-    QUIC_CFQ_ITEM_EX *ex = (QUIC_CFQ_ITEM_EX *)item;
+    const QUIC_CFQ_ITEM_EX *ex = (const QUIC_CFQ_ITEM_EX *)item;
 
     return (ex->flags & QUIC_CFQ_ITEM_FLAG_UNRELIABLE) != 0;
 }
@@ -246,7 +247,7 @@ QUIC_CFQ_ITEM *ossl_quic_cfq_add_frame(QUIC_CFQ *cfq,
     item->priority = priority;
     item->frame_type = frame_type;
     item->pn_space = pn_space;
-    item->encoded = (unsigned char *)encoded;
+    item->encoded = CONST_CAST(unsigned char *) encoded;
     item->encoded_len = encoded_len;
     item->free_cb = free_cb;
     item->free_cb_arg = free_cb_arg;
@@ -349,7 +350,7 @@ QUIC_CFQ_ITEM *ossl_quic_cfq_get_priority_head(const QUIC_CFQ *cfq,
 QUIC_CFQ_ITEM *ossl_quic_cfq_item_get_priority_next(const QUIC_CFQ_ITEM *item,
     uint32_t pn_space)
 {
-    QUIC_CFQ_ITEM_EX *ex = (QUIC_CFQ_ITEM_EX *)item;
+    QUIC_CFQ_ITEM_EX *ex = CONST_CAST(QUIC_CFQ_ITEM_EX *) item;
 
     if (ex == NULL)
         return NULL;

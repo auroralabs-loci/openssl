@@ -477,7 +477,7 @@ int X509_VERIFY_PARAM_set1_ip(X509_VERIFY_PARAM *param,
         return 0;
     }
     return int_x509_param_set1((char **)&param->ip, &param->iplen,
-        (char *)ip, iplen);
+        (const char *)ip, iplen);
 }
 
 int X509_VERIFY_PARAM_set1_ip_asc(X509_VERIFY_PARAM *param, const char *ipasc)
@@ -642,7 +642,7 @@ const X509_VERIFY_PARAM *X509_VERIFY_PARAM_lookup(const char *name)
     int idx;
     X509_VERIFY_PARAM pm;
 
-    pm.name = (char *)name;
+    pm.name = CONST_CAST(char *) name;
     if (param_table != NULL) {
         /* Ideally, this would be done under a lock */
         sk_X509_VERIFY_PARAM_sort(param_table);

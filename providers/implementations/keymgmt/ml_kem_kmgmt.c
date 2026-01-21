@@ -437,7 +437,7 @@ static int ml_kem_key_fromdata(ML_KEM_KEY *key,
     if (publen > 0 && prvlen > 0) {
         /* point to the ek offset in dk = DKpke||ek||H(ek)||z */
         puboff = prvlen - ML_KEM_RANDOM_BYTES - ML_KEM_PKHASH_BYTES - publen;
-        if (memcmp(pubenc, (unsigned char *)prvenc + puboff, publen) != 0) {
+        if (memcmp(pubenc, (const unsigned char *)prvenc + puboff, publen) != 0) {
             ERR_raise_data(ERR_LIB_PROV, PROV_R_INVALID_KEY,
                 "explicit %s public key does not match private",
                 v->algorithm_name);
@@ -498,11 +498,11 @@ static void *ml_kem_load(const void *reference, size_t reference_sz)
 
     if (ossl_prov_is_running() && reference_sz == sizeof(key)) {
         /* The contents of the reference is the address to our object */
-        key = *(ML_KEM_KEY **)reference;
+        key = *CONST_CAST(ML_KEM_KEY **) reference;
         encoded_dk = key->encoded_dk;
         key->encoded_dk = NULL;
         /* We grabbed, so we detach it */
-        *(ML_KEM_KEY **)reference = NULL;
+        *CONST_CAST(ML_KEM_KEY **) reference = NULL;
         if (encoded_dk != NULL
             && ossl_ml_kem_encode_seed(seed, sizeof(seed), key)
             && !check_seed(seed, encoded_dk, key))

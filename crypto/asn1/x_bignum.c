@@ -97,7 +97,7 @@ static int bn_i2c(const ASN1_VALUE **pval, unsigned char *cont, int *putype,
     int pad;
     if (*pval == NULL)
         return -1;
-    bn = (BIGNUM *)*pval;
+    bn = CONST_CAST(BIGNUM *) *pval;
     /* If MSB set in an octet we need a padding byte */
     if (BN_num_bits(bn) & 0x7)
         pad = 0;
@@ -160,7 +160,7 @@ static int bn_secure_c2i(ASN1_VALUE **pval, const unsigned char *cont, int len,
 static int bn_print(BIO *out, const ASN1_VALUE **pval, const ASN1_ITEM *it,
     int indent, const ASN1_PCTX *pctx)
 {
-    if (!BN_print(out, *(BIGNUM **)pval))
+    if (!BN_print(out, *(const BIGNUM **)pval))
         return 0;
     if (BIO_puts(out, "\n") <= 0)
         return 0;

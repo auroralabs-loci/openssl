@@ -418,7 +418,7 @@ static ASN1_TYPE *asn1_multi(int utype, const char *section, X509V3_CTX *cnf,
     if (section) {
         if (!cnf)
             goto bad;
-        sect = X509V3_get_section(cnf, (char *)section);
+        sect = X509V3_get_section(cnf, section);
         if (!sect)
             goto bad;
         for (i = 0; i < sk_CONF_VALUE_num(sect); i++) {
@@ -609,7 +609,7 @@ static ASN1_TYPE *asn1_str2type(const char *str, int format, int utype)
         }
         vtmp.name = NULL;
         vtmp.section = NULL;
-        vtmp.value = (char *)str;
+        vtmp.value = CONST_CAST(char *) str;
         if (!X509V3_get_value_bool(&vtmp, &atmp->value.boolean)) {
             ERR_raise(ERR_LIB_ASN1, ASN1_R_ILLEGAL_BOOLEAN);
             goto bad_str;
@@ -681,7 +681,7 @@ static ASN1_TYPE *asn1_str2type(const char *str, int format, int utype)
             goto bad_form;
         }
 
-        if (ASN1_mbstring_copy(&atmp->value.asn1_string, (unsigned char *)str,
+        if (ASN1_mbstring_copy(&atmp->value.asn1_string, (const unsigned char *)str,
                 -1, format, ASN1_tag2bit(utype))
             <= 0) {
             ERR_raise(ERR_LIB_ASN1, ERR_R_ASN1_LIB);

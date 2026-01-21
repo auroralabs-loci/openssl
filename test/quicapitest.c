@@ -245,7 +245,7 @@ static int test_fin_only_blocking(void)
 
     if (!TEST_true(ossl_quic_tserver_stream_new(qtserv, 0, &sid))
         || !TEST_true(ossl_quic_tserver_write(qtserv, sid,
-            (unsigned char *)msg,
+            (const unsigned char *)msg,
             strlen(msg), &numbytes))
         || !TEST_size_t_eq(strlen(msg), numbytes))
         goto end;
@@ -983,7 +983,7 @@ static int test_bio_ssl(void)
             || !TEST_mem_eq(msg, msglen, buf, readbytes))
             goto err;
 
-        if (!TEST_true(ossl_quic_tserver_write(qtserv, sid, (unsigned char *)msg,
+        if (!TEST_true(ossl_quic_tserver_write(qtserv, sid, (const unsigned char *)msg,
                 msglen, &written)))
             goto err;
         ossl_quic_tserver_tick(qtserv);
@@ -2231,7 +2231,7 @@ static int tparam_on_enc_ext(QTEST_FAULT *qtf, QTEST_ENCRYPTED_EXTENSIONS *ee,
         goto err;
 
     for (; PACKET_remaining(&pkt) > 0;) {
-        tp_p = (unsigned char *)ossl_quic_wire_decode_transport_param_bytes(&pkt,
+        tp_p = CONST_CAST(unsigned char *) ossl_quic_wire_decode_transport_param_bytes(&pkt,
             &id,
             &tp_len);
         if (!TEST_ptr(tp_p)) {
@@ -2526,7 +2526,7 @@ static int select_alpn(SSL *ssl, const unsigned char **out,
 {
     static unsigned char alpn[] = { 8, 'o', 's', 's', 'l', 't', 'e', 's', 't' };
 
-    if (SSL_select_next_proto((unsigned char **)out, out_len, alpn, sizeof(alpn),
+    if (SSL_select_next_proto(CONST_CAST(unsigned char **) out, out_len, alpn, sizeof(alpn),
             in, in_len)
         == OPENSSL_NPN_NEGOTIATED)
         return SSL_TLSEXT_ERR_OK;

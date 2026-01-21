@@ -960,7 +960,7 @@ int load_key_certs_crls(const char *uri, int format, int maybe_stdin,
 
     if ((input_type = format2string(format)) != NULL) {
         itp[0] = OSSL_PARAM_construct_utf8_string(OSSL_STORE_PARAM_INPUT_TYPE,
-            (char *)input_type, 0);
+            CONST_CAST(char *) input_type, 0);
         itp[1] = OSSL_PARAM_construct_end();
         params = itp;
     }
@@ -2662,7 +2662,7 @@ BIO *app_http_tls_cb(BIO *bio, void *arg, int connect, int detail)
         BIO *sbio = NULL;
         X509_STORE *ts = SSL_CTX_get_cert_store(ssl_ctx);
         X509_VERIFY_PARAM *vpm = X509_STORE_get0_param(ts);
-        const char *host = vpm == NULL ? NULL : X509_VERIFY_PARAM_get0_host(vpm, 0 /* first hostname */);
+        char *host = vpm == NULL ? NULL : X509_VERIFY_PARAM_get0_host(vpm, 0 /* first hostname */);
 
         /* adapt after fixing callback design flaw, see #17088 */
         if ((info->use_proxy
