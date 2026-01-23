@@ -70,4 +70,16 @@
 #define OSSL_TLS_GROUP_ID_FFDHE_START 0x0100 /* inclusive */
 #define OSSL_TLS_GROUP_ID_FFDHE_END 0x01FF /* inclusive */
 
+static ossl_inline int is_ecdhe_group(const uint16_t group_id)
+{
+    /* This includes the usual EC groups, and also ECX, GOST ... */
+    return group_id < OSSL_TLS_GROUP_ID_FFDHE_START;
+}
+
+static ossl_inline int is_ffdhe_group(const uint16_t group_id)
+{
+    return group_id >= OSSL_TLS_GROUP_ID_FFDHE_START
+        && group_id <= OSSL_TLS_GROUP_ID_FFDHE_END;
+}
+
 #endif

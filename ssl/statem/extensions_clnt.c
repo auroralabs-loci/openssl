@@ -144,18 +144,6 @@ EXT_RETURN tls_construct_ctos_srp(SSL_CONNECTION *s, WPACKET *pkt,
 }
 #endif
 
-static ossl_inline int is_ecdhe_group(const TLS_GROUP_INFO *ginfo)
-{
-    /* This includes the usual EC groups, and also ECX, GOST ... */
-    return ginfo->group_id < OSSL_TLS_GROUP_ID_FFDHE_START;
-}
-
-static ossl_inline int is_ffdhe_group(const TLS_GROUP_INFO *ginfo)
-{
-    return ginfo->group_id >= OSSL_TLS_GROUP_ID_FFDHE_START
-        && ginfo->group_id <= OSSL_TLS_GROUP_ID_FFDHE_END;
-}
-
 /*
  * With (D)TLS < 1.3 the only negotiated supported key exchange groups are
  * FFDHE (RFC7919) and ECDHE/ECX (RFC8422 + legacy).  With (D)TLS 1.3, we add
@@ -220,11 +208,11 @@ static int negotiate_dhe(SSL_CONNECTION *s, dhe_check_t check_type,
         if (!tls_valid_group(s, ctmp, min_version, max_version, NULL, &ginfo))
             continue;
 
-        if (check_type == ffdhe_check && is_ffdhe_group(ginfo)
-            && tls_group_allowed(s, ctmp, SSL_SECOP_TMP_DH))
+        if (check_type == ffdhe_check && is_ffdhe_group(ginfo->group_id)
+            && tls_group_allowed(s, ctmp, SSL_SECOP_CURVE_SUPPORTED))
             return 1;
 
-        if (check_type != ffdhe_check && is_ecdhe_group(ginfo)
+        if (check_type != ffdhe_check && is_ecdhe_group(ginfo->group_id)
             && tls_group_allowed(s, ctmp, SSL_SECOP_CURVE_SUPPORTED))
             return 1;
     }
@@ -311,8 +299,9 @@ EXT_RETURN tls_construct_ctos_supported_groups(SSL_CONNECTION *s, WPACKET *pkt,
 
         if (!tls_valid_group(s, ctmp, min_version, max_version, &okfortls13,
                 &ginfo)
-            || (!use_ecdhe && is_ecdhe_group(ginfo))
-            || (!use_ffdhe && is_ffdhe_group(ginfo))
+            || (!use_ecdhe && is_ecdhe_group(ginfo->group_id))
+            || (!use_ffdhe && is_ffdhe_group(ginfo->group_id))
+            /* Note: SSL_SECOP_CURVE_SUPPORTED covers all key exchange groups */
             || !tls_group_allowed(s, ctmp, SSL_SECOP_CURVE_SUPPORTED))
             continue;
 

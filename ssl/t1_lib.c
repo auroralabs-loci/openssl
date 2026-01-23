@@ -1055,27 +1055,11 @@ uint16_t tls1_shared_group(SSL_CONNECTION *s, int nmatch, int groups)
         const TLS_GROUP_INFO *inf;
         int minversion, maxversion;
 
-        if (!tls1_in_list(id, supp, num_supp))
+        if (!tls1_in_list(id, supp, num_supp)
+            || (groups == TLS1_GROUPS_NON_FFDHE_GROUPS && is_ffdhe_group(id))
+            || (groups == TLS1_GROUPS_FFDHE_GROUPS && !is_ffdhe_group(id))
+            || !tls_group_allowed(s, id, SSL_SECOP_CURVE_SHARED))
             continue;
-
-        if (id >= OSSL_TLS_GROUP_ID_FFDHE_START
-            && id <= OSSL_TLS_GROUP_ID_FFDHE_END) {
-            /*
-             * If the caller is not interested in FFDHE groups or the group is
-             * not allowed, ignore it
-             */
-            if (groups == TLS1_GROUPS_NON_FFDHE_GROUPS
-                || !tls_group_allowed(s, id, SSL_SECOP_TMP_DH))
-                continue;
-        } else {
-            /*
-             * If the caller is only interested in FFDHE groups or the group is
-             * not allowed, ignore it
-             */
-            if (groups == TLS1_GROUPS_FFDHE_GROUPS
-                || !tls_group_allowed(s, id, SSL_SECOP_CURVE_SHARED))
-                continue;
-        }
 
         inf = tls1_group_id_lookup(ctx, id);
         if (!ossl_assert(inf != NULL))
@@ -1769,14 +1753,8 @@ int tls1_check_group_id(SSL_CONNECTION *s, uint16_t group_id,
             return 0;
     }
 
-    if (group_id >= OSSL_TLS_GROUP_ID_FFDHE_START
-        && group_id <= OSSL_TLS_GROUP_ID_FFDHE_END) {
-        if (!tls_group_allowed(s, group_id, SSL_SECOP_TMP_DH))
-            return 0;
-    } else {
-        if (!tls_group_allowed(s, group_id, SSL_SECOP_CURVE_CHECK))
-            return 0;
-    }
+    if (!tls_group_allowed(s, group_id, SSL_SECOP_CURVE_CHECK))
+        return 0;
 
     /* For clients, nothing more to check */
     if (!s->server)
@@ -1952,8 +1930,7 @@ int tls1_check_ffdhe_tmp_key(SSL_CONNECTION *s, unsigned long cid)
      */
     tls1_get_peer_groups(s, &peer_groups, &num_peer_groups);
     for (size_t i = 0; i < num_peer_groups; i++) {
-        if (peer_groups[i] >= OSSL_TLS_GROUP_ID_FFDHE_START
-            && peer_groups[i] <= OSSL_TLS_GROUP_ID_FFDHE_END)
+        if (is_ffdhe_group(peer_groups[i]))
             return 0;
     }
 

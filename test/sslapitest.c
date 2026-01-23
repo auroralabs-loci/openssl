@@ -11435,7 +11435,6 @@ end:
     return testresult;
 }
 
-#ifndef OPENSSL_NO_TLS1_3
 /*
  * Test the server will reject FFDHE ciphersuites if no supported FFDHE group is
  * advertised by the client.
@@ -11655,7 +11654,6 @@ end:
 
     return testresult;
 }
-#endif /* OPENSSL_NO_TLS1_3 */
 
 #endif /* OPENSSL_NO_DH */
 #endif /* OPENSSL_NO_TLS1_2 */
