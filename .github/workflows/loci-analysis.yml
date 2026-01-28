@@ -1,0 +1,60 @@
+name: LOCI Analysis
+on:
+  push:
+    branches:
+      - main*
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  loci:
+    runs-on: ubuntu-latest
+
+    env:
+      LOCI_PROJECT: OpenSSL
+      LOCI_API_KEY: '${{ secrets.LOCI_API_KEY }}'
+      LOCI_BACKEND_URL: '${{ vars.LOCI_BACKEND_URL }}'
+
+    environment: ${{ vars.LOCI_ENV || 'PROD__AL_DEMO' }}
+
+    steps:
+      - name: Prepare environment
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu build-essential cmake git ninja-build python3-minimal
+          echo "Cross compiler installed"
+        shell: bash
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build sample
+        run: |
+          CC=gcc CXX=g++ ./Configure linux-aarch64 --cross-compile-prefix=aarch64-linux-gnu- -g -fno-stack-protector
+          make -j
+          mv apps/openssl openssl
+          echo "Successfully compiled openssl"
+        shell: bash
+
+      - name: LOCI Upload
+        uses: auroralabs-loci/loci-action@v1
+        with:
+          mode: upload
+          binaries: |
+                openssl
+                libcrypto.so
+                libcrypto.so.4
+                libssl.so
+                libssl.so.4
+          project: '${{ env.LOCI_PROJECT }}'
+          wait-base: 'true'
+
+      - name: Agent Summary
+        uses: auroralabs-loci/loci-action@v1
+        env:
+          LOCI_GITHUB_TOKEN: '${{ secrets.REPO_READ_ONLY_PAT }}' 
+        with:
+          mode: summary
+          project: '${{ env.LOCI_PROJECT }}'
+          wait-base: 'true'
