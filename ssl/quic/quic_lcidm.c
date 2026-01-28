@@ -73,15 +73,15 @@ static unsigned long lcid_hash(const QUIC_LCID *lcid_obj)
     SIPHASH siphash = {
         0,
     };
-    unsigned long hashval = 0;
+    uint64_t hashval = 0;
 
-    if (!SipHash_set_hash_size(&siphash, sizeof(unsigned long)))
+    if (!SipHash_set_hash_size(&siphash, sizeof(hashval)))
         goto out;
     if (!SipHash_Init(&siphash, (uint8_t *)lcid_obj->hash_key, 0, 0))
         goto out;
     SipHash_Update(&siphash, lcid_obj->cid.id, lcid_obj->cid.id_len);
     if (!SipHash_Final(&siphash, (unsigned char *)&hashval,
-            sizeof(unsigned long)))
+            sizeof(hashval)))
         goto out;
 out:
     return hashval;
