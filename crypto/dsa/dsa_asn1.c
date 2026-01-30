@@ -44,7 +44,7 @@ ASN1_SEQUENCE_cb(DSAPrivateKey, dsa_cb) = {
     ASN1_SIMPLE(DSA, params.q, BIGNUM),
     ASN1_SIMPLE(DSA, params.g, BIGNUM),
     ASN1_SIMPLE(DSA, pub_key, BIGNUM),
-    ASN1_SIMPLE(DSA, priv_key, CBIGNUM)
+    ASN1_SIMPLE(DSA, priv_key, BIGNUM)
 } static_ASN1_SEQUENCE_END_cb(DSA, DSAPrivateKey)
 
 IMPLEMENT_ASN1_ENCODE_FUNCTIONS_fname(DSA, DSAPrivateKey, DSAPrivateKey)
