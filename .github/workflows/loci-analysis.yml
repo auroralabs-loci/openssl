@@ -2,18 +2,21 @@ name: LOCI Analysis
 on:
   push:
     branches:
-      - main*
+      - loci/main-*
+      - main-*
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
   loci:
+    if: vars.UPSTREAM_REPO != ''
     runs-on: ubuntu-latest
 
     env:
-      LOCI_PROJECT: OpenSSL
+      LOCI_PROJECT: 'OpenSSL'
       LOCI_API_KEY: '${{ secrets.LOCI_API_KEY }}'
       LOCI_BACKEND_URL: '${{ vars.LOCI_BACKEND_URL }}'
+      GH_TOKEN: ${{ secrets.MIRROR_REPOS_WRITE_PAT }}
 
     environment: ${{ vars.LOCI_ENV || 'PROD__AL_DEMO' }}
 
@@ -28,6 +31,26 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.sha }}
+
+      - name: Compute target
+        id: target
+        if: github.event_name == 'push'
+        run: |
+          branch="${{ github.ref_name }}"
+          sha="${branch#loci/main-}"
+          echo "value=main@${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute base
+        id: base
+        if: github.event_name == 'pull_request'
+        run: |
+          git remote add upstream "https://github.com/${{ vars.UPSTREAM_REPO }}.git" 2>/dev/null || true   
+          git fetch upstream                                                                               
+          upstream_default=$(gh api "repos/${{ vars.UPSTREAM_REPO }}" --jq .default_branch)                
+          merge_base=$(git merge-base HEAD "upstream/${upstream_default}")                                 
+          short_sha="${merge_base:0:7}"                                                                    
+          echo "value=main@${short_sha}" >> "$GITHUB_OUTPUT"                                               
 
       - name: Build sample
         run: |
@@ -42,19 +65,11 @@ jobs:
         with:
           mode: upload
           binaries: |
-                openssl
-                libcrypto.so
-                libcrypto.so.4
-                libssl.so
-                libssl.so.4
+              openssl
+              libcrypto.so
+              libcrypto.so.4
+              libssl.so
+              libssl.so.4
           project: '${{ env.LOCI_PROJECT }}'
-          wait-base: 'true'
-
-      - name: Agent Summary
-        uses: auroralabs-loci/loci-action@v1
-        env:
-          LOCI_GITHUB_TOKEN: '${{ secrets.REPO_READ_ONLY_PAT }}' 
-        with:
-          mode: summary
-          project: '${{ env.LOCI_PROJECT }}'
-          wait-base: 'true'
+          target: ${{ steps.target.outputs.value || ''}}
+          base: ${{ steps.base.outputs.value || '' }}
