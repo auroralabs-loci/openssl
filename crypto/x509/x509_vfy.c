@@ -1433,6 +1433,7 @@ int ossl_x509_check_crl_time(X509_STORE_CTX *ctx, X509_CRL *crl, int notify)
 {
     int64_t verification_time, last_update, next_update;
     int err;
+    X509_CRL *oldcrl = ctx->current_crl;
 
     if (!get_verification_time(ctx->param, &verification_time))
         return 1;
@@ -1467,7 +1468,7 @@ int ossl_x509_check_crl_time(X509_STORE_CTX *ctx, X509_CRL *crl, int notify)
     }
 
     if (notify)
-        ctx->current_crl = NULL;
+        ctx->current_crl = oldcrl;
 
     return 1;
 }
