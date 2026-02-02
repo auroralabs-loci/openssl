@@ -70,6 +70,10 @@ SSL_set_client_CA_list() sets the B<list> of CAs sent to the client when
 requesting a client certificate for the chosen B<ssl>, overriding the
 setting valid for B<ssl>'s SSL_CTX object. Ownership of B<list> is transferred
 to B<s> and it should not be freed by the caller.
+Note that passing NULL for B<list> does not clear the CA list; instead, the
+setting from B<ssl>'s SSL_CTX object will be used. To clear the CA list and
+send no CAs to the client, pass an empty stack created with
+sk_X509_NAME_new_null().
 
 SSL_CTX_get_client_CA_list() returns the list of client CAs explicitly set for
 B<ctx> using SSL_CTX_set_client_CA_list(). The returned list should not be freed
