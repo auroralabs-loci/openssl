@@ -1,0 +1,1 @@
+{"pull_number":"29944","title":"config: use -path instead of -wholename","body":"-wholename is mostly alias to -path, and -path is more portable. E.g. -wholename does not exist on NetBSD.","pull_head_sha":"1403c963c648b43782ea064e9dd24926f21fec35","loci_pr_branch":"loci/pr-29944-find-wholename","short_merge_base":"d36cdcd","loci_main_branch":"loci/main-d36cdcd","use_loci_base":0}
