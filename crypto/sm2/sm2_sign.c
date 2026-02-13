@@ -20,10 +20,15 @@
 #include <openssl/bn.h>
 #include <string.h>
 
+static const uint8_t default_sm2_id[] = {
+    0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+    0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38
+};
+
 int ossl_sm2_compute_z_digest(uint8_t *out,
     const EVP_MD *digest,
     const uint8_t *id,
-    const size_t id_len,
+    size_t id_len,
     const EC_KEY *key)
 {
     int rc = 0;
@@ -79,6 +84,11 @@ int ossl_sm2_compute_z_digest(uint8_t *out,
     }
 
     /* Z = h(ENTL || ID || a || b || xG || yG || xA || yA) */
+
+    if (id == NULL) {
+        id = default_sm2_id;
+        id_len = sizeof(default_sm2_id);
+    }
 
     if (id_len >= (UINT16_MAX / 8)) {
         /* too large */

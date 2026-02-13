@@ -341,6 +341,10 @@ group.
 Also its key exchange messages at close to 1700 bytes are larger than the
 roughly 1200 bytes for the first two groups.
 
+OpenSSL 4.0 introduces the B<curveSM2> (also known as C<ECDHE over SM2>) key
+exchange group as specified in RFC8998, and B<curveSM2MLKEM768>, which is a
+hybrid of the B<curveSM2> group with B<ML-KEM-768>.
+
 As of OpenSSL 3.5 key exchange group names are case-insensitive.
 
 B<SSL_CTX_get0_implemented_groups> was first implemented in OpenSSL 3.5.
