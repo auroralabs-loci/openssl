@@ -165,6 +165,14 @@ OpenSSL 4.0
 
    *David von Oheimb*
 
+ * `X509V3_set_nconf()` and `X509V3_set_ctx()` now return a value to enable error checking.
+   Among others, `X509V3_set_ctx()` now checks the recommendation that at most one
+   of the `subject`, `req`, and `crl` parameters should be non-NULL.
+   If the check fails, the function returns 0 but for backward compatibility
+   does not add an error queue entry and still makes use of all parameters.
+
+   *David von Oheimb*
+
  * Drop darwin-i386{,-cc} and darwin-ppc{,64}{,-cc} targets from Configurations.
 
    *Daniel Kubec and Eugene Syromiatnikov*

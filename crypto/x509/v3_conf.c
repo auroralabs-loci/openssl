@@ -471,11 +471,13 @@ int X509V3_set_ctx(X509V3_CTX *ctx, X509 *issuer, X509 *subject, X509_REQ *req,
     ctx->db = NULL;
     ctx->issuer_pkey = NULL;
 
-    /* doing this check after initialization as a precaution */
-    if ((subject != NULL) + (req != NULL) + (crl != NULL) > 1) {
-        ERR_raise(ERR_LIB_X509V3, ERR_R_PASSED_INVALID_ARGUMENT);
+    /*
+     * At most one of the subject, req, and crl parameters should be non-NULL.
+     * For backward compatibility, doing this check at the end, after using them,
+     * and without adding an ERR_R_PASSED_INVALID_ARGUMENT error queue entry on failure.
+     */
+    if ((subject != NULL) + (req != NULL) + (crl != NULL) > 1)
         return 0;
-    }
     return 1;
 }
 
