@@ -32,6 +32,20 @@ OpenSSL 4.0
 
 ### Changes between 3.6 and 4.0 [xx XXX xxxx]
 
+ * Added support for TLS 1.3 SM cipher suites TLS_SM4_GCM_SM3 and TLS_SM4_CCM_SM3
+   from RFC 8998, signature algorithm sm2sig_sm3, key exchange group curveSM2,
+   and hybrid group curveSM2MLKEM768.
+
+   Verification of SM2-signed certificates required changing the default *distinguishing
+   identifier* from empty to the constant ASCII string "1234567812345678".
+   An explicit empty distinguishing identifier value may need to be used to verify
+   or create signatures that are compatible with versions of OpenSSL prior to 4.0.
+   With the command-line tools an empty value can be specified with the use of
+   either the **-pkeyopt** (`openssl-pkeyutl(1)`) or **-sigopt** (`openssl-dgst(1)`)
+   option with a value of "distid:".
+
+   *Viktor Dukhovni and Milan Broz*
+
  * FIPS self tests can now be deferred and run as needed when installing
    the fips module with the -defer_tests option.
 
