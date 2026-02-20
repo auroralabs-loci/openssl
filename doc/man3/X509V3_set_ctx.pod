@@ -9,8 +9,8 @@ X509V3_set_issuer_pkey - X.509 v3 extension generation utilities
 
  #include <openssl/x509v3.h>
 
- void X509V3_set_ctx(X509V3_CTX *ctx, X509 *issuer, X509 *subject,
-                     X509_REQ *req, X509_CRL *crl, int flags);
+ int X509V3_set_ctx(X509V3_CTX *ctx, X509 *issuer, X509 *subject,
+                    X509_REQ *req, X509_CRL *crl, int flags);
  int X509V3_set_issuer_pkey(X509V3_CTX *ctx, EVP_PKEY *pkey);
 
 =head1 DESCRIPTION
@@ -19,7 +19,7 @@ X509V3_set_ctx() fills in the basic fields of I<ctx> of type B<X509V3_CTX>,
 providing details potentially needed by functions producing X509 v3 extensions.
 These may make use of fields of the certificate I<subject>, the certification
 request I<req>, or the certificate revocation list I<crl>.
-At most one of these three parameters can be non-NULL.
+At most one of these three parameters should be non-NULL.
 When constructing the subject key identifier of a certificate by computing a
 hash value of its public key, the public key is taken from I<subject> or I<req>.
 Similarly, when constructing subject alternative names from any email addresses
@@ -45,7 +45,7 @@ to provide fallback data for the authority key identifier extension.
 
 =head1 RETURN VALUES
 
-X509V3_set_issuer_pkey() returns 1 on success and 0 on error.
+X509V3_set_ctx() and X509V3_set_issuer_pkey() return 1 on success and 0 on error.
 
 =head1 SEE ALSO
 
@@ -54,6 +54,8 @@ L<X509_add_ext(3)>
 =head1 HISTORY
 
 X509V3_set_issuer_pkey() was added in OpenSSL 3.0.
+
+X509V3_set_ctx() obtained proper error handling in OpenSSL 4.0.
 
 CTX_TEST was deprecated in OpenSSL 3.0; use X509V3_CTX_TEST instead.
 
