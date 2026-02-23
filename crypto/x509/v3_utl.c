@@ -1121,10 +1121,11 @@ ASN1_OCTET_STRING *a2i_IPADDRESS_NC(const char *ipasc)
     ASN1_OCTET_STRING *ret = NULL;
     unsigned char ipout[32];
     char *iptmp = NULL, *p;
+    const char *slash;
     int iplen1, iplen2;
 
-    p = strchr(ipasc, '/');
-    if (p == NULL)
+    slash = strchr(ipasc, '/');
+    if (slash == NULL)
         return NULL;
     iptmp = OPENSSL_strdup(ipasc);
     if (iptmp == NULL)
