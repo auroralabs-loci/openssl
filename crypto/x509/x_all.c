@@ -112,10 +112,9 @@ int X509_sign(X509 *x, EVP_PKEY *pkey, const EVP_MD *md)
         ERR_raise(ERR_LIB_X509, ERR_R_PASSED_NULL_PARAMETER);
         return 0;
     }
-    if ((exts = X509_get0_extensions(x)) != NULL && bad_keyid_exts(exts))
-        return 0;
-    if (sk_X509_EXTENSION_num(X509_get0_extensions(x)) > 0
-        && !X509_set_version(x, X509_VERSION_3))
+    if ((exts = X509_get0_extensions(x)) != NULL
+        && sk_X509_EXTENSION_num(exts) > 0
+        && (bad_keyid_exts(exts) || !X509_set_version(x, X509_VERSION_3)))
         return 0;
 
     /*
