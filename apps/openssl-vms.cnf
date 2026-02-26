@@ -213,7 +213,7 @@ basicConstraints=CA:FALSE
 
 # PKIX recommendations harmless if included in all certificates.
 subjectKeyIdentifier=hash
-authorityKeyIdentifier=keyid,issuer
+authorityKeyIdentifier=keyid:nonss, issuer:nonss
 
 # This stuff is for subjectAltName and issuerAltname.
 # Import the email address.
@@ -244,8 +244,7 @@ keyUsage = nonRepudiation, digitalSignature, keyEncipherment
 # PKIX recommendation.
 
 subjectKeyIdentifier=hash
-
-authorityKeyIdentifier=keyid:always,issuer
+authorityKeyIdentifier=keyid:nonss,issuer:nonss
 
 basicConstraints = critical,CA:true
 
@@ -286,7 +285,7 @@ basicConstraints=CA:FALSE
 
 # PKIX recommendations harmless if included in all certificates.
 subjectKeyIdentifier=hash
-authorityKeyIdentifier=keyid,issuer
+authorityKeyIdentifier=keyid:always
 
 # This stuff is for subjectAltName and issuerAltname.
 # Import the email address.
