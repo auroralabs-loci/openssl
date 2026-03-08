@@ -31,6 +31,15 @@ OpenSSL Releases
 
 ### Changes between 3.6 and 4.0 [xx XXX xxxx]
 
+ * Added support for RFC 8701 GREASE (Generate Random Extensions And Sustain
+   Extensibility). When `SSL_OP_GREASE` is set, the TLS client injects
+   reserved GREASE values into cipher suites, supported versions, supported
+   groups, signature algorithms, key share, and extensions in the ClientHello
+   to prevent ecosystem ossification. The `openssl s_client` command gains a
+   `-grease` option to enable this.
+
+   *OpenSSL Contributors*
+
  * Added restrictions on the maximum number of TLS key_shares (16) that a server
    will pay attention to, as well as the maximum number of supported groups
    (128) and sig algs (128). Any sent beyond this number are ignored in order
