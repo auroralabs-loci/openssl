@@ -31,6 +31,12 @@ OpenSSL Releases
 
 ### Changes between 4.0 and 4.1 [xx XXX xxxx]
 
+ * Fixed a memory leak in `load_key_certs_crls()` when `X509_add_cert()` or
+   `sk_X509_CRL_push()` failed (e.g. on allocation failure). The cert or CRL
+   obtained via OSSL_STORE was not freed on the failure path.
+
+   *Issue #30364*
+
  * Added AVX2 optimized ML-DSA NTT operations on `x86_64`.
 
    *Marcel Cornu and Tomasz Kantecki*
