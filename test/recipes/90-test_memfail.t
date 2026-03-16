@@ -30,6 +30,8 @@ run(test(["handshake-memfail", "count", srctop_dir("test", "certs")], stderr => 
 
 run(test(["x509-memfail", "count", srctop_file("test", "certs", "servercert.pem")], stderr => "$resultdir/x509countinfo.txt"));
 
+run(test(["load_key_certs_crls_memfail", "count", srctop_file("test", "certs", "servercert.pem")], stderr => "$resultdir/load_key_certs_crls_countinfo.txt"));
+
 sub get_count_info {
     my ($infile) = @_;
     my @vals;
@@ -59,11 +61,13 @@ my ($hsskipcount, $hsmalloccount) = get_count_info("$resultdir/hscountinfo.txt")
 
 my ($x509skipcount, $x509malloccount) = get_count_info("$resultdir/x509countinfo.txt");
 
+my ($load_key_certs_crls_skipcount, $load_key_certs_crls_malloccount) = get_count_info("$resultdir/load_key_certs_crls_countinfo.txt");
+
 #
 # Now we can plan our tests.  We plan to run malloccount iterations of this
 # test
 #
-plan tests => $hsmalloccount + $x509malloccount;
+plan tests => $hsmalloccount + $x509malloccount + $load_key_certs_crls_malloccount;
 
 sub run_memfail_test {
     my $skipcount = $_[0];
@@ -87,4 +91,6 @@ sub run_memfail_test {
 run_memfail_test($hsskipcount, $hsmalloccount, ["handshake-memfail", "run", srctop_dir("test", "certs")]);
 
 run_memfail_test($x509skipcount, $x509malloccount, ["x509-memfail", "run", srctop_file("test", "certs", "servercert.pem")]);
+
+run_memfail_test($load_key_certs_crls_skipcount, $load_key_certs_crls_malloccount, ["load_key_certs_crls_memfail", "run", srctop_file("test", "certs", "servercert.pem")]);
 
