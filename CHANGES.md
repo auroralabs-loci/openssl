@@ -41,6 +41,26 @@ OpenSSL Releases
 
    *Paul Louvel*
 
+   An explicit comparison was added inside ssl_get_prev_session() between the
+   session ID offered by the client in the ClientHello and the session ID
+   embedded in the SSL_SESSION returned by the external cache.
+
+   If they do not match, the cached session is released and
+   ssl_get_prev_session() returns as a cache miss, forcing a full handshake.
+   Catching the mismatch here ensures the server never sends a ServerHello that
+   claims resumption of a session ID it cannot legitimately echo.
+
+   A mismatch unambiguously indicates one of the following:
+
+   - a corrupt cache entry
+   - an external cache implementation that returned the wrong session
+   - an active tampering attempt
+
+   In all three cases refusing resumption and falling back to a full handshake
+   is the correct response.
+
+   *Daniel Kubec*
+
  * Added `CTLOG_STORE_add0_log()` to add individual CT logs to a `CTLOG_STORE`.
 
    *Tim Perry*
