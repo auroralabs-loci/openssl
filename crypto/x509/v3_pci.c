@@ -84,10 +84,11 @@ static int i2r_pci(X509V3_EXT_METHOD *method, PROXY_CERT_INFO_EXTENSION *pci,
     BIO_puts(out, "\n");
     BIO_printf(out, "%*sPolicy Language: ", indent, "");
     i2a_ASN1_OBJECT(out, pci->proxyPolicy->policyLanguage);
-    if (pci->proxyPolicy->policy && pci->proxyPolicy->policy->data)
+    if (pci->proxyPolicy->policy != NULL
+        && ASN1_STRING_get0_data(pci->proxyPolicy->policy) != NULL)
         BIO_printf(out, "\n%*sPolicy Text: %.*s", indent, "",
-            pci->proxyPolicy->policy->length,
-            pci->proxyPolicy->policy->data);
+            ASN1_STRING_length(pci->proxyPolicy->policy),
+            (const char *)ASN1_STRING_get0_data(pci->proxyPolicy->policy));
     return 1;
 }
 
@@ -122,7 +123,6 @@ static int process_pci_value(CONF_VALUE *val,
         }
     } else if (strcmp(val->name, "policy") == 0) {
         char *valp = val->value;
-        unsigned char *tmp_data = NULL;
         long val_len;
 
         if (*policy == NULL) {
@@ -136,32 +136,26 @@ static int process_pci_value(CONF_VALUE *val,
         }
         if (CHECK_AND_SKIP_PREFIX(valp, "hex:")) {
             unsigned char *tmp_data2 = OPENSSL_hexstr2buf(valp, &val_len);
+            int old_len = ASN1_STRING_length(*policy);
+            unsigned char *new_data;
 
             if (!tmp_data2) {
                 X509V3_conf_err(val);
                 goto err;
             }
 
-            tmp_data = OPENSSL_realloc((*policy)->data,
-                (*policy)->length + val_len + 1);
-            if (tmp_data) {
-                (*policy)->data = tmp_data;
-                memcpy(&(*policy)->data[(*policy)->length],
-                    tmp_data2, val_len);
-                (*policy)->length += val_len;
-                (*policy)->data[(*policy)->length] = '\0';
-            } else {
+            new_data = OPENSSL_malloc(old_len + val_len + 1);
+            if (new_data == NULL) {
                 OPENSSL_free(tmp_data2);
-                /*
-                 * realloc failure implies the original data space is b0rked
-                 * too!
-                 */
-                OPENSSL_free((*policy)->data);
-                (*policy)->data = NULL;
-                (*policy)->length = 0;
+                ASN1_STRING_set0(*policy, NULL, 0);
                 X509V3_conf_err(val);
                 goto err;
             }
+            if (old_len > 0)
+                memcpy(new_data, ASN1_STRING_get0_data(*policy), old_len);
+            memcpy(new_data + old_len, tmp_data2, val_len);
+            new_data[old_len + val_len] = '\0';
+            ASN1_STRING_set0(*policy, new_data, old_len + val_len);
             OPENSSL_free(tmp_data2);
         } else if (CHECK_AND_SKIP_PREFIX(valp, "file:")) {
             unsigned char buf[2048];
@@ -174,25 +168,25 @@ static int process_pci_value(CONF_VALUE *val,
             }
             while ((n = BIO_read(b, buf, sizeof(buf))) > 0
                 || (n == 0 && BIO_should_retry(b))) {
+                int old_len;
+                unsigned char *new_data;
+
                 if (!n)
                     continue;
 
-                tmp_data = OPENSSL_realloc((*policy)->data,
-                    (*policy)->length + n + 1);
-
-                if (!tmp_data) {
-                    OPENSSL_free((*policy)->data);
-                    (*policy)->data = NULL;
-                    (*policy)->length = 0;
+                old_len = ASN1_STRING_length(*policy);
+                new_data = OPENSSL_malloc(old_len + n + 1);
+                if (new_data == NULL) {
+                    ASN1_STRING_set0(*policy, NULL, 0);
                     X509V3_conf_err(val);
                     BIO_free_all(b);
                     goto err;
                 }
-
-                (*policy)->data = tmp_data;
-                memcpy(&(*policy)->data[(*policy)->length], buf, n);
-                (*policy)->length += n;
-                (*policy)->data[(*policy)->length] = '\0';
+                if (old_len > 0)
+                    memcpy(new_data, ASN1_STRING_get0_data(*policy), old_len);
+                memcpy(new_data + old_len, buf, n);
+                new_data[old_len + n] = '\0';
+                ASN1_STRING_set0(*policy, new_data, old_len + n);
             }
             BIO_free_all(b);
 
@@ -202,32 +196,23 @@ static int process_pci_value(CONF_VALUE *val,
                 goto err;
             }
         } else if (CHECK_AND_SKIP_PREFIX(valp, "text:")) {
+            int old_len = ASN1_STRING_length(*policy);
+            unsigned char *new_data;
+
             val_len = (int)strlen(valp);
-            tmp_data = OPENSSL_realloc((*policy)->data,
-                (*policy)->length + val_len + 1);
-            if (tmp_data) {
-                (*policy)->data = tmp_data;
-                memcpy(&(*policy)->data[(*policy)->length],
-                    val->value + 5, val_len);
-                (*policy)->length += val_len;
-                (*policy)->data[(*policy)->length] = '\0';
-            } else {
-                /*
-                 * realloc failure implies the original data space is b0rked
-                 * too!
-                 */
-                OPENSSL_free((*policy)->data);
-                (*policy)->data = NULL;
-                (*policy)->length = 0;
+            new_data = OPENSSL_malloc(old_len + val_len + 1);
+            if (new_data == NULL) {
+                ASN1_STRING_set0(*policy, NULL, 0);
                 X509V3_conf_err(val);
                 goto err;
             }
+            if (old_len > 0)
+                memcpy(new_data, ASN1_STRING_get0_data(*policy), old_len);
+            memcpy(new_data + old_len, val->value + 5, val_len);
+            new_data[old_len + val_len] = '\0';
+            ASN1_STRING_set0(*policy, new_data, old_len + val_len);
         } else {
             ERR_raise(ERR_LIB_X509V3, X509V3_R_INCORRECT_POLICY_SYNTAX_TAG);
-            X509V3_conf_err(val);
-            goto err;
-        }
-        if (!tmp_data) {
             X509V3_conf_err(val);
             goto err;
         }
