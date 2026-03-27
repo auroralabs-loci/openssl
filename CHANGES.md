@@ -31,6 +31,13 @@ OpenSSL Releases
 
 ### Changes between 4.0 and 4.1 [xx XXX xxxx]
 
+ * Fixed a memory leak in the Issuer Sign Tool (`issuerSignTool`) X.509v3
+   extension configuration parser.  `ISSUER_SIGN_TOOL_new()` already allocates
+   the UTF-8 string members; replacing them without freeing the originals
+   orphaned those allocations.
+
+   *John Claus*
+
  * Added AVX2 optimized ML-DSA NTT operations on `x86_64`.
 
    *Marcel Cornu and Tomasz Kantecki*
