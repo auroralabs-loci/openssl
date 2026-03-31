@@ -21,14 +21,17 @@ jobs:
           - arch: amd64
             os: windows-2022
             config: enable-lms enable-fips
+            dllsfx: -x64
             vcvars: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat
           - arch: amd64
             os: windows-2025
             config: enable-lms enable-fips no-thread-pool no-quic
+            dllsfx: -x64
             vcvars: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat
           - arch: x86
             os: windows-2022
             config: no-fips enable-lms
+            dllsfx:
             vcvars: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars32.bat
     runs-on: ${{ matrix.platform.os }}
     steps:
@@ -67,6 +70,7 @@ jobs:
         apps/openssl.exe version -v | %{($_ -split '\s+')[1]}
         apps/openssl.exe version -v | %{($_ -split '\s+')[1] -replace '([0-9]+\.[0-9]+)(\..*)','$1'}
         echo "OSSL_VERSION=$(apps/openssl.exe version -v | %{($_ -split '\s+')[1] -replace '([0-9]+\.[0-9]+)(\..*)','$1'})" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OSSL_MAJOR=$(apps/openssl.exe version -v | %{($_ -split '\s+')[1] -replace '([0-9]+)\.[0-9]+(\..*)','$1'})" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
     - name: Set registry keys
       working-directory: _build
       run: |
@@ -83,7 +87,7 @@ jobs:
         ./apps/openssl.exe version -c
     - name: Check platform symbol usage
       working-directory: _build
-      run: perl ../util/checkplatformsyms.pl ../util/platform_symbols/windows-symbols.txt libcrypto-3-x64.dll ./libssl-3-x64.dll
+      run: perl ../util/checkplatformsyms.pl ../util/platform_symbols/windows-symbols.txt libcrypto-${Env:OSSL_MAJOR}${{ matrix.platform.dllsfx }}.dll ./libssl-${Env:OSSL_MAJOR}${{ matrix.platform.dllsfx }}.dll
     - name: test
       working-directory: _build
       shell: cmd
