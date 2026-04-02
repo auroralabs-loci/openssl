@@ -14,6 +14,13 @@ my $expectedsyms=$ARGV[0];
 
 shift(@ARGV);
 
+# Check that object files exist
+foreach (@ARGV) {
+    unless (-f $_ && -r $_) {
+        die "Path is not a regular readable file: '$_'";
+    }
+}
+
 my $objlist;
 my $objfilelist = join(" ", @ARGV);
 my $expsyms;
@@ -36,7 +43,7 @@ if ($Config{osname} eq "MSWin32") {
         {
             chomp;
             my $dllfile = $_;
-            $dllfile =~ s/( +)(.*)(\.dll)(.*)/DLLFILE \2/;
+            $dllfile =~ s/( +)(.*)(\.dll)(.*)/DLLFILE $2/;
             if (index($dllfile, "DLLFILE") >= 0) {
                 $currentdll = substr($dllfile, 8);
                 $currentdll =~ s/^\s+|s+$//g;
