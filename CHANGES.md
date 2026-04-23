@@ -31,6 +31,11 @@ OpenSSL Releases
 
 ### Changes between 4.0 and 4.1 [xx XXX xxxx]
 
+ * Added support for Ed25519 and Ed448 certificates in DTLS 1.2. Previously,
+   these certificate types were only supported in TLS 1.2 and TLS 1.3.
+
+   *Adriano Sela Aviles*
+
  * Improved DTLS handshake robustness under UDP reordering by buffering and
    replaying early ChangeCipherSpec (CCS) records at the expected state.
 
