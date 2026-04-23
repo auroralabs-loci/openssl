@@ -76,8 +76,12 @@ static int get_crl_delta(X509_STORE_CTX *ctx,
 static void get_delta_sk(X509_STORE_CTX *ctx, X509_CRL **dcrl,
     int *pcrl_score, X509_CRL *base,
     STACK_OF(X509_CRL) *crls);
-static void crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl, X509 **pissuer,
-    int *pcrl_score);
+static void crl_akid_check(X509_STORE_CTX *ctx, X509 *x, X509_CRL *crl,
+    X509 **pissuer, int *pcrl_score);
+static int crl_issuer_check(X509_CRL *crl, X509 *issuer,
+    const X509_NAME *crl_issuer_name);
+static int crl_issuer_lookup(X509_STORE_CTX *ctx, X509 *x, X509_CRL *crl,
+    X509 **pissuer, int *pcrl_score);
 static int crl_crldp_check(X509 *x, X509_CRL *crl, int crl_score,
     unsigned int *preasons);
 static int check_crl_path(X509_STORE_CTX *ctx, X509 *x);
@@ -1704,7 +1708,7 @@ static int get_crl_score(X509_STORE_CTX *ctx, X509 **pissuer,
         crl_score |= CRL_SCORE_TIME;
 
     /* Check authority key ID and locate certificate issuer */
-    crl_akid_check(ctx, crl, pissuer, &crl_score);
+    crl_akid_check(ctx, x, crl, pissuer, &crl_score);
 
     /* If we can't locate certificate issuer at this point forget it */
     if ((crl_score & CRL_SCORE_AKID) == 0)
@@ -1723,7 +1727,7 @@ static int get_crl_score(X509_STORE_CTX *ctx, X509 **pissuer,
     return crl_score;
 }
 
-static void crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl,
+static void crl_akid_check(X509_STORE_CTX *ctx, X509 *x, X509_CRL *crl,
     X509 **pissuer, int *pcrl_score)
 {
     X509 *crl_issuer = NULL;
@@ -1736,7 +1740,7 @@ static void crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl,
 
     crl_issuer = sk_X509_value(ctx->chain, cidx);
 
-    if (X509_check_akid(crl_issuer, crl->akid) == X509_V_OK) {
+    if (crl_issuer_check(crl, crl_issuer, cnm)) {
         if (*pcrl_score & CRL_SCORE_ISSUER_NAME) {
             *pcrl_score |= CRL_SCORE_AKID | CRL_SCORE_ISSUER_CERT;
             *pissuer = crl_issuer;
@@ -1746,14 +1750,15 @@ static void crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl,
 
     for (cidx++; cidx < sk_X509_num(ctx->chain); cidx++) {
         crl_issuer = sk_X509_value(ctx->chain, cidx);
-        if (X509_NAME_cmp(X509_get_subject_name(crl_issuer), cnm))
-            continue;
-        if (X509_check_akid(crl_issuer, crl->akid) == X509_V_OK) {
+        if (crl_issuer_check(crl, crl_issuer, cnm)) {
             *pcrl_score |= CRL_SCORE_AKID | CRL_SCORE_SAME_PATH;
             *pissuer = crl_issuer;
             return;
         }
     }
+
+    if (crl_issuer_lookup(ctx, x, crl, pissuer, pcrl_score))
+        return;
 
     /* Anything else needs extended CRL support */
     if ((ctx->param->flags & X509_V_FLAG_EXTENDED_CRL_SUPPORT) == 0)
@@ -1765,14 +1770,82 @@ static void crl_akid_check(X509_STORE_CTX *ctx, X509_CRL *crl,
      */
     for (i = 0; i < sk_X509_num(ctx->untrusted); i++) {
         crl_issuer = sk_X509_value(ctx->untrusted, i);
-        if (X509_NAME_cmp(X509_get_subject_name(crl_issuer), cnm) != 0)
-            continue;
-        if (X509_check_akid(crl_issuer, crl->akid) == X509_V_OK) {
+        if (crl_issuer_check(crl, crl_issuer, cnm)) {
             *pissuer = crl_issuer;
             *pcrl_score |= CRL_SCORE_AKID;
             return;
         }
     }
+}
+
+static int crl_issuer_check(X509_CRL *crl, X509 *issuer,
+    const X509_NAME *crl_issuer_name)
+{
+    if (issuer == NULL)
+        return 0;
+    if (X509_NAME_cmp(X509_get_subject_name(issuer), crl_issuer_name) != 0)
+        return 0;
+    return X509_check_akid(issuer, crl->akid) == X509_V_OK;
+}
+
+/*
+ * With partial chains, the built chain may stop at a trusted intermediate, so
+ * the issuer of that intermediate's CRL can be in the trust store but not in
+ * ctx->chain. Look it up only for direct CRLs and keep an owned reference.
+ */
+static int crl_issuer_lookup(X509_STORE_CTX *ctx, X509 *x, X509_CRL *crl,
+    X509 **pissuer, int *pcrl_score)
+{
+    STACK_OF(X509) *certs = NULL;
+    const X509_NAME *cnm = X509_CRL_get_issuer(crl);
+    int i, ret = 0, last = sk_X509_num(ctx->chain) - 1;
+
+    if ((ctx->param->flags & X509_V_FLAG_PARTIAL_CHAIN) == 0
+        || ctx->error_depth != last
+        || (*pcrl_score & CRL_SCORE_ISSUER_NAME) == 0
+        || ctx->lookup_certs == NULL)
+        return 0;
+
+    certs = ctx->lookup_certs(ctx, cnm);
+    if (certs == NULL)
+        return 0;
+
+    for (i = 0; i < sk_X509_num(certs); i++) {
+        X509 *crl_issuer = sk_X509_value(certs, i);
+
+        if (sk_X509_contains(ctx->chain, crl_issuer))
+            continue;
+        if (!ctx->check_issued(ctx, x, crl_issuer))
+            continue;
+        if (!crl_issuer_check(crl, crl_issuer, cnm))
+            continue;
+
+        if (ctx->crl_issuer_certs == NULL) {
+            ctx->crl_issuer_certs = sk_X509_new_null();
+            if (ctx->crl_issuer_certs == NULL)
+                break;
+        }
+        if (!X509_add_cert(ctx->crl_issuer_certs, crl_issuer,
+                X509_ADD_FLAG_UP_REF))
+            break;
+
+        *pissuer = crl_issuer;
+        /*
+         * The looked-up certificate directly issued |x|, so treat this like
+         * the normal adjacent-issuer case even though PARTIAL_CHAIN truncated
+         * the path before this certificate was added to ctx->chain.
+         * CRL_SCORE_ISSUER_CERT includes CRL_SCORE_SAME_PATH, which skips
+         * check_crl_path(); that path check would otherwise compare the
+         * partial-chain anchor with the looked-up issuer as different trust
+         * anchors.
+         */
+        *pcrl_score |= CRL_SCORE_AKID | CRL_SCORE_ISSUER_CERT;
+        ret = 1;
+        break;
+    }
+
+    OSSL_STACK_OF_X509_free(certs);
+    return ret;
 }
 
 /*
@@ -2896,6 +2969,7 @@ int X509_STORE_CTX_init(X509_STORE_CTX *ctx, X509_STORE *store, const X509 *x509
     ctx->error_depth = 0;
     ctx->current_cert = NULL;
     ctx->current_issuer = NULL;
+    ctx->crl_issuer_certs = NULL;
     ctx->current_crl = NULL;
     ctx->current_crl_score = 0;
     ctx->current_reasons = 0;
@@ -3043,6 +3117,8 @@ void X509_STORE_CTX_cleanup(X509_STORE_CTX *ctx)
     ctx->tree = NULL;
     OSSL_STACK_OF_X509_free(ctx->chain);
     ctx->chain = NULL;
+    OSSL_STACK_OF_X509_free(ctx->crl_issuer_certs);
+    ctx->crl_issuer_certs = NULL;
     CRYPTO_free_ex_data(CRYPTO_EX_INDEX_X509_STORE_CTX, ctx, &(ctx->ex_data));
     memset(&ctx->ex_data, 0, sizeof(ctx->ex_data));
 }

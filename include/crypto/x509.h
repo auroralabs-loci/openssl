@@ -270,6 +270,11 @@ struct x509_store_ctx_st { /* X509_STORE_CTX */
     X509 *current_cert; /* XXX should really be made const */
     /* cert currently being tested as valid issuer */
     X509 *current_issuer;
+    /*
+     * CRL issuer certificates looked up for truncated partial chains.
+     * Used to keep current_issuer valid when it points outside chain/untrusted.
+     */
+    STACK_OF(X509) *crl_issuer_certs;
     /* current CRL */
     X509_CRL *current_crl;
     /* score of current CRL */
