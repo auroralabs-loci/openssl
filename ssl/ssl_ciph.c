@@ -20,6 +20,9 @@
 #include <openssl/comp.h>
 #include <openssl/crypto.h>
 #include <openssl/conf.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/objects.h>
 #include <openssl/trace.h>
 #include "internal/nelem.h"
 #include "ssl_local.h"
@@ -274,6 +277,36 @@ static const SSL_CIPHER cipher_aliases[] = {
 
 };
 
+static int check_md_support(const char *pkey_name)
+{
+    int nid = NID_undef;
+    (void)ERR_set_mark();
+    EVP_MD *md = EVP_MD_fetch(NULL, pkey_name, NULL);
+    if (md) {
+        (void)ERR_clear_last_mark();
+        EVP_MD_free(md);
+        nid = OBJ_sn2nid(pkey_name);
+    } else {
+        (void)ERR_pop_to_mark();
+    }
+    return nid;
+}
+
+static int check_sign_support(const char *pkey_name)
+{
+    int nid = NID_undef;
+    (void)ERR_set_mark();
+    EVP_SIGNATURE *sign = EVP_SIGNATURE_fetch(NULL, pkey_name, NULL);
+    if (sign) {
+        (void)ERR_clear_last_mark();
+        EVP_SIGNATURE_free(sign);
+        nid = OBJ_sn2nid(pkey_name);
+    } else {
+        (void)ERR_pop_to_mark();
+    }
+    return nid;
+}
+
 int ssl_load_ciphers(SSL_CTX *ctx)
 {
     size_t i;
@@ -362,33 +395,36 @@ int ssl_load_ciphers(SSL_CTX *ctx)
     memcpy(ctx->ssl_mac_pkey_id, default_mac_pkey_id,
         sizeof(ctx->ssl_mac_pkey_id));
 
-    ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC_IDX] = 0;
+    ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC_IDX] = check_md_support(SN_id_Gost28147_89_MAC);
     if (ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_GOST89MAC_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_GOST89MAC;
 
-    ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC12_IDX] = 0;
+    ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC12_IDX] = check_md_support(SN_gost_mac_12);
     if (ctx->ssl_mac_pkey_id[SSL_MD_GOST89MAC12_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_GOST89MAC12_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_GOST89MAC12;
 
-    ctx->ssl_mac_pkey_id[SSL_MD_MAGMAOMAC_IDX] = 0;
+    ctx->ssl_mac_pkey_id[SSL_MD_MAGMAOMAC_IDX] = check_md_support(SN_magma_mac);
     if (ctx->ssl_mac_pkey_id[SSL_MD_MAGMAOMAC_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_MAGMAOMAC_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_MAGMAOMAC;
 
-    ctx->ssl_mac_pkey_id[SSL_MD_KUZNYECHIKOMAC_IDX] = 0;
+    ctx->ssl_mac_pkey_id[SSL_MD_KUZNYECHIKOMAC_IDX] = check_md_support(SN_kuznyechik_mac);
     if (ctx->ssl_mac_pkey_id[SSL_MD_KUZNYECHIKOMAC_IDX])
         ctx->ssl_mac_secret_size[SSL_MD_KUZNYECHIKOMAC_IDX] = 32;
     else
         ctx->disabled_mac_mask |= SSL_KUZNYECHIKOMAC;
 
-    ctx->disabled_auth_mask |= SSL_aGOST01 | SSL_aGOST12;
-    ctx->disabled_auth_mask |= SSL_aGOST12;
-    ctx->disabled_auth_mask |= SSL_aGOST12;
+    if (!check_sign_support(SN_id_GostR3410_2001))
+        ctx->disabled_auth_mask |= SSL_aGOST01 | SSL_aGOST12;
+    if (!check_sign_support(SN_id_GostR3410_2012_256))
+        ctx->disabled_auth_mask |= SSL_aGOST12;
+    if (!check_sign_support(SN_id_GostR3410_2012_512))
+        ctx->disabled_auth_mask |= SSL_aGOST12;
     /*
      * Disable GOST key exchange if no GOST signature algs are available *
      */
