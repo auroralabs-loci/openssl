@@ -44,6 +44,11 @@ ASN1_IA5STRING *s2i_ASN1_IA5STRING(X509V3_EXT_METHOD *method,
     X509V3_CTX *ctx, const char *str)
 {
     ASN1_IA5STRING *ia5;
+    int len;
+#ifdef CHARSET_EBCDIC
+    char *tmp;
+#endif
+
     if (str == NULL) {
         ERR_raise(ERR_LIB_X509V3, X509V3_R_INVALID_NULL_ARGUMENT);
         return NULL;
@@ -52,12 +57,24 @@ ASN1_IA5STRING *s2i_ASN1_IA5STRING(X509V3_EXT_METHOD *method,
         ERR_raise(ERR_LIB_X509V3, ERR_R_ASN1_LIB);
         return NULL;
     }
-    if (!ASN1_STRING_set((ASN1_STRING *)ia5, str, (int)strlen(str))) {
+    len = (int)strlen(str);
+#ifdef CHARSET_EBCDIC
+    if ((tmp = OPENSSL_malloc(len)) == NULL) {
         ASN1_IA5STRING_free(ia5);
         return NULL;
     }
-#ifdef CHARSET_EBCDIC
-    ebcdic2ascii(ia5->data, ia5->data, ASN1_STRING_length(ia5));
+    ebcdic2ascii(tmp, str, (size_t)len);
+    if (!ASN1_STRING_set((ASN1_STRING *)ia5, tmp, len)) {
+        OPENSSL_free(tmp);
+        ASN1_IA5STRING_free(ia5);
+        return NULL;
+    }
+    OPENSSL_free(tmp);
+#else
+    if (!ASN1_STRING_set((ASN1_STRING *)ia5, str, len)) {
+        ASN1_IA5STRING_free(ia5);
+        return NULL;
+    }
 #endif /* CHARSET_EBCDIC */
     return ia5;
 }
