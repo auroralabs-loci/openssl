@@ -211,6 +211,16 @@ OPENSSL_KEYBITS=768 \
 # EC cert with named curve signed by named curve ca
 ./mkcert.sh genee server.example ee-key-ec-named-named \
     ee-cert-ec-named-named ca-key-ec-named ca-cert-ec-named
+# EC EE cert directly issued by the P-384 EC root, with a P-256 named-curve
+# leaf key whose per-key conv_form is COMPRESSED.  The leading SPKI bit-string
+# byte is 0x02 or 0x03, exercising the OSSL_PKEY_PARAM_EC_POINT_CONVERSION_-
+# FORMAT keygen path end-to-end.  Anchors TLS 1.2 ec_point_formats negotiation
+# tests in 80-test_ssl_new (sslnew tests rely solely on PKIX, so the CN/SAN
+# value is functionally arbitrary; we keep "server.example" for consistency).
+OPENSSL_KEYALG=ec OPENSSL_KEYBITS=prime256v1 \
+OPENSSL_EC_POINT_FORMAT=compressed \
+./mkcert.sh genee server.example server-ec-compressed-key \
+    server-ec-compressed-cert p384-root-key p384-root
 # 1024-bit leaf key
 OPENSSL_KEYBITS=1024 \
 ./mkcert.sh genee server.example ee-key-1024 ee-cert-1024 ca-key ca-cert

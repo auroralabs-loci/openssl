@@ -1911,6 +1911,8 @@ static int tls1_check_pkey_comp(SSL_CONNECTION *s, EVP_PKEY *pkey)
     unsigned char comp_id;
     size_t i;
     int point_conv;
+    const unsigned char *own_formats;
+    size_t own_formats_len;
 
     /* If not an EC key nothing to check */
     if (!EVP_PKEY_is_a(pkey, "EC"))
@@ -1944,6 +1946,21 @@ static int tls1_check_pkey_comp(SSL_CONNECTION *s, EVP_PKEY *pkey)
      */
     if (s->ext.peer_ecpointformats == NULL)
         return 1;
+    /*
+     * The cert's point form must also be in our OWN advertised list -- we
+     * mustn't commit to a cert in a form we told the peer we don't speak.
+     * Without this the server's cert-selection happily picks (and the
+     * client happily decodes-and-then-rejects) a leaf whose form is in the
+     * peer's list but not ours, leaving the peer to alert illegal_parameter
+     * on receipt instead of catching the mismatch before it's wire-visible.
+     */
+    tls1_get_formatlist(s, &own_formats, &own_formats_len);
+    for (i = 0; i < own_formats_len; i++) {
+        if (own_formats[i] == comp_id)
+            break;
+    }
+    if (i == own_formats_len)
+        return 0;
 
     for (i = 0; i < s->ext.peer_ecpointformats_len; i++) {
         if (s->ext.peer_ecpointformats[i] == comp_id)
