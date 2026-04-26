@@ -503,16 +503,14 @@ static int ec_export(void *keydata, int selection, OSSL_CALLBACK *param_cb,
         && (selection & OSSL_KEYMGMT_SELECT_PUBLIC_KEY) == 0)
         return 0;
 
-    tmpl = OSSL_PARAM_BLD_new();
-    if (tmpl == NULL)
+    if ((bnctx = BN_CTX_new_ex(ossl_ec_key_get_libctx(ec))) == NULL)
         return 0;
+    BN_CTX_start(bnctx);
 
-    bnctx = BN_CTX_new_ex(ossl_ec_key_get_libctx(ec));
-    if (bnctx == NULL) {
+    if ((tmpl = OSSL_PARAM_BLD_new()) == NULL) {
         ok = 0;
         goto end;
     }
-    BN_CTX_start(bnctx);
     /*
      * OSSL_PKEY_PARAM_EC_POINT_CONVERSION_FORMAT is added based on the group's
      * asn1_form by the call below; otherparams_to_params() no longer adds the
