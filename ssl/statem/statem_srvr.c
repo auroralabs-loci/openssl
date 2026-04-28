@@ -688,10 +688,40 @@ static WRITE_TRAN ossl_statem_server13_write_transition(SSL_CONNECTION *s)
             st->hand_state = TLS_ST_OK;
             return WRITE_TRAN_CONTINUE;
         }
-        if (s->num_tickets > s->sent_tickets)
-            st->hand_state = TLS_ST_SW_SESSION_TICKET;
-        else
+        /*
+         * Do not issue TLSv1.3 tickets when both SSL_OP_NO_TICKET and
+         * SSL_SESS_CACHE_OFF are set, or when the client did not advertise
+         * psk_kex_modes (indicating no interest in resumption).
+         *
+         * RFC 8446 4.2.9: To use Pre-Shared Keys (PSKs), the client MUST
+         * include the "psk_key_exchange_modes" extension.
+         *
+         * A client that sends a "pre_shared_key" extension MUST also send
+         * "psk_key_exchange_modes". If "pre_shared_key" is present without
+         * "psk_key_exchange_modes", the server MUST abort the handshake.
+         *
+         * The server MUST NOT select a key exchange mode that is not listed
+         * by the client in this extension.
+         *
+         * Servers SHOULD NOT issue NewSessionTicket messages with PSKs that are
+         * incompatible with the client’s advertised modes. If they do, the
+         * consequence is limited to failed resumption attempts by the client.
+         *
+         * Note: Although RFC 9149 allows clients to signal no interest in
+         * session tickets or resumption (e.g. new_session_count = 0 or
+         * resumption_count = 0), this implementation does not currently
+         * interpret or enforce those parameters.
+         */
+        if (((s->options & SSL_OP_NO_TICKET) != 0
+                && (SSL_CONNECTION_GET_CTX(s)->session_cache_mode & SSL_SESS_CACHE_SERVER)
+                    == 0)
+            || s->ext.psk_kex_mode == TLSEXT_KEX_MODE_FLAG_NONE) {
             st->hand_state = TLS_ST_OK;
+        } else if (s->num_tickets > s->sent_tickets) {
+            st->hand_state = TLS_ST_SW_SESSION_TICKET;
+        } else {
+            st->hand_state = TLS_ST_OK;
+        }
         return WRITE_TRAN_CONTINUE;
 
     case TLS_ST_SR_KEY_UPDATE:

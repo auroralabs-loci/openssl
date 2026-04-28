@@ -795,6 +795,16 @@ EXT_RETURN tls_construct_ctos_psk_kex_modes(SSL_CONNECTION *s, WPACKET *pkt,
     ECH_SAME_EXT(s, context, pkt)
 #endif
 
+    /*
+     * When both SSL_OP_NO_TICKET and SSL_SESS_CACHE_OFF are set on the client
+     * side, the client does not send the psk_key_exchange_modes extension for
+     * TLS 1.3. This effectively signals that the client has no interest in
+     * session tickets and session resumption.
+     */
+    if ((s->options & SSL_OP_NO_TICKET) != 0
+        && SSL_CTX_get_session_cache_mode(s->session_ctx) == SSL_SESS_CACHE_OFF)
+        return EXT_RETURN_NOT_SENT;
+
     if (!WPACKET_put_bytes_u16(pkt, TLSEXT_TYPE_psk_kex_modes)
         || !WPACKET_start_sub_packet_u16(pkt)
         || !WPACKET_start_sub_packet_u8(pkt)
