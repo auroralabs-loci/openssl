@@ -13,8 +13,10 @@
 #include <openssl/bio.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include "testutil.h"
 
@@ -530,6 +532,147 @@ err:
     return NULL;
 }
 
+static X509_NAME *make_name(const char *cn)
+{
+    X509_NAME *name = X509_NAME_new();
+
+    if (!TEST_ptr(name)
+        || !TEST_true(X509_NAME_add_entry_by_NID(name, NID_commonName,
+                                                MBSTRING_ASC,
+                                                (const unsigned char *)cn,
+                                                -1, -1, 0))) {
+        X509_NAME_free(name);
+        return NULL;
+    }
+
+    return name;
+}
+
+static int add_cert_ext(X509 *cert, X509 *issuer, int nid, const char *value)
+{
+    X509V3_CTX ctx;
+    X509_EXTENSION *ext = NULL;
+    int ret = 0;
+
+    X509V3_set_ctx_nodb(&ctx);
+    X509V3_set_ctx(&ctx, issuer, cert, NULL, NULL, 0);
+    if (!TEST_ptr(ext = X509V3_EXT_nconf_nid(NULL, &ctx, nid, value)))
+        goto err;
+    ret = TEST_true(X509_add_ext(cert, ext, -1));
+
+err:
+    X509_EXTENSION_free(ext);
+    return ret;
+}
+
+static X509 *make_cert(const char *cn, EVP_PKEY *pkey, X509 *issuer,
+                       EVP_PKEY *issuer_key, int serial, int ca)
+{
+    X509 *cert = NULL;
+    X509_NAME *subject = NULL;
+    X509_NAME *issuer_name = NULL;
+    X509 *ctx_issuer = NULL;
+    EVP_PKEY *signing_key = issuer_key;
+    const char *bc = ca ? "critical,CA:TRUE" : "critical,CA:FALSE";
+    const char *ku = ca ? "critical,keyCertSign,cRLSign"
+                        : "critical,digitalSignature";
+
+    if (signing_key == NULL)
+        signing_key = pkey;
+
+    if (!TEST_ptr(cert = X509_new())
+        || !TEST_ptr(subject = make_name(cn))
+        || !TEST_true(X509_set_version(cert, 2))
+        || !TEST_true(ASN1_INTEGER_set(X509_get_serialNumber(cert), serial))
+        || !TEST_ptr(X509_gmtime_adj(X509_getm_notBefore(cert), -60 * 60))
+        || !TEST_ptr(X509_gmtime_adj(X509_getm_notAfter(cert),
+                                     365 * 24 * 60 * 60))
+        || !TEST_true(X509_set_subject_name(cert, subject))
+        || !TEST_true(X509_set_pubkey(cert, pkey)))
+        goto err;
+
+    issuer_name = issuer != NULL ? X509_get_subject_name(issuer) : subject;
+    ctx_issuer = issuer != NULL ? issuer : cert;
+    if (!TEST_true(X509_set_issuer_name(cert, issuer_name))
+        || !TEST_true(add_cert_ext(cert, ctx_issuer, NID_basic_constraints, bc))
+        || !TEST_true(add_cert_ext(cert, ctx_issuer, NID_key_usage, ku))
+        || !TEST_int_gt(X509_sign(cert, signing_key, EVP_sha256()), 0))
+        goto err;
+
+    X509_NAME_free(subject);
+    return cert;
+
+err:
+    X509_NAME_free(subject);
+    X509_free(cert);
+    return NULL;
+}
+
+static X509_CRL *make_crl(X509 *issuer, EVP_PKEY *issuer_key)
+{
+    X509_CRL *crl = NULL;
+    ASN1_TIME *last_update = NULL, *next_update = NULL;
+
+    if (!TEST_ptr(crl = X509_CRL_new())
+        || !TEST_ptr(last_update = X509_gmtime_adj(NULL, -60 * 60))
+        || !TEST_ptr(next_update = X509_gmtime_adj(NULL, 365 * 24 * 60 * 60))
+        || !TEST_true(X509_CRL_set_version(crl, 1))
+        || !TEST_true(X509_CRL_set_issuer_name(crl,
+                                               X509_get_subject_name(issuer)))
+        || !TEST_true(X509_CRL_set1_lastUpdate(crl, last_update))
+        || !TEST_true(X509_CRL_set1_nextUpdate(crl, next_update))
+        || !TEST_int_gt(X509_CRL_sign(crl, issuer_key, EVP_sha256()), 0))
+        goto err;
+
+    ASN1_TIME_free(last_update);
+    ASN1_TIME_free(next_update);
+    return crl;
+
+err:
+    ASN1_TIME_free(last_update);
+    ASN1_TIME_free(next_update);
+    X509_CRL_free(crl);
+    return NULL;
+}
+
+static int verify_partial_chain_crl_all(X509 *leaf, X509 *intermediate,
+                                        X509 *root, X509_CRL *intermediate_crl,
+                                        X509_CRL *root_crl, int add_root)
+{
+    X509_STORE_CTX *ctx = X509_STORE_CTX_new();
+    X509_STORE *store = X509_STORE_new();
+    X509_VERIFY_PARAM *param = X509_VERIFY_PARAM_new();
+    int status = X509_V_ERR_UNSPECIFIED;
+
+    if (!TEST_ptr(ctx)
+        || !TEST_ptr(store)
+        || !TEST_ptr(param)
+        || !TEST_true(X509_STORE_add_cert(store, intermediate))
+        || (add_root && !TEST_true(X509_STORE_add_cert(store, root)))
+        || !TEST_true(X509_STORE_add_crl(store, intermediate_crl))
+        || !TEST_true(X509_STORE_add_crl(store, root_crl))
+        || !TEST_true(X509_STORE_CTX_init(ctx, store, leaf, NULL)))
+        goto err;
+
+    X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_NO_CHECK_TIME
+                                       | X509_V_FLAG_PARTIAL_CHAIN
+                                       | X509_V_FLAG_CRL_CHECK
+                                       | X509_V_FLAG_CRL_CHECK_ALL);
+    X509_VERIFY_PARAM_set_depth(param, 16);
+    X509_STORE_CTX_set0_param(ctx, param);
+    param = NULL;
+
+    ERR_clear_error();
+    status = X509_verify_cert(ctx) == 1 ? X509_V_OK
+                                        : X509_STORE_CTX_get_error(ctx);
+
+err:
+    X509_VERIFY_PARAM_free(param);
+    X509_STORE_CTX_free(ctx);
+    X509_STORE_free(store);
+    return status;
+}
+
 static int test_basic_crl(void)
 {
     X509_CRL *basic_crl = CRL_from_strings(kBasicCRL);
@@ -588,6 +731,52 @@ static int test_bad_issuer_crl(void)
             X509_V_ERR_UNABLE_TO_GET_CRL);
     X509_CRL_free(bad_issuer_crl);
     return r;
+}
+
+static int test_partial_chain_crl_check_all(void)
+{
+    EVP_PKEY *leaf_key = NULL, *intermediate_key = NULL, *root_key = NULL;
+    X509 *leaf = NULL, *intermediate = NULL, *root = NULL;
+    X509_CRL *intermediate_crl = NULL, *root_crl = NULL;
+    int ret = 0;
+
+    if (!TEST_ptr(leaf_key = EVP_PKEY_Q_keygen(NULL, NULL, "RSA",
+                                               (size_t)2048))
+        || !TEST_ptr(intermediate_key = EVP_PKEY_Q_keygen(NULL, NULL,
+                                                          "RSA",
+                                                          (size_t)2048))
+        || !TEST_ptr(root_key = EVP_PKEY_Q_keygen(NULL, NULL, "RSA",
+                                                  (size_t)2048))
+        || !TEST_ptr(root = make_cert("Root CA C", root_key, NULL, NULL,
+                                      1, 1))
+        || !TEST_ptr(intermediate = make_cert("Intermediate CA B",
+                                              intermediate_key, root,
+                                              root_key, 2, 1))
+        || !TEST_ptr(leaf = make_cert("End Entity A", leaf_key,
+                                      intermediate, intermediate_key, 3, 0))
+        || !TEST_ptr(root_crl = make_crl(root, root_key))
+        || !TEST_ptr(intermediate_crl = make_crl(intermediate,
+                                                 intermediate_key)))
+        goto err;
+
+    ret = TEST_int_eq(verify_partial_chain_crl_all(leaf, intermediate, root,
+                                                   intermediate_crl, root_crl,
+                                                   1), X509_V_OK)
+          && TEST_int_eq(verify_partial_chain_crl_all(leaf, intermediate,
+                                                      root, intermediate_crl,
+                                                      root_crl, 0),
+                         X509_V_ERR_UNABLE_TO_GET_CRL);
+
+err:
+    X509_CRL_free(intermediate_crl);
+    X509_CRL_free(root_crl);
+    X509_free(leaf);
+    X509_free(intermediate);
+    X509_free(root);
+    EVP_PKEY_free(leaf_key);
+    EVP_PKEY_free(intermediate_key);
+    EVP_PKEY_free(root_key);
+    return ret;
 }
 
 static int test_crl_empty_idp(void)
@@ -891,6 +1080,7 @@ int setup_tests(void)
     ADD_TEST(test_no_crl);
     ADD_TEST(test_basic_crl);
     ADD_TEST(test_bad_issuer_crl);
+    ADD_TEST(test_partial_chain_crl_check_all);
     ADD_TEST(test_crl_empty_idp);
     ADD_TEST(test_known_critical_crl);
     ADD_TEST(test_crl_cert_issuer_ext);
