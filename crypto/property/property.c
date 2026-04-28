@@ -1318,7 +1318,8 @@ static ossl_inline int ossl_method_store_cache_set_locked(OSSL_METHOD_STORE *sto
     }
 err:
     res = 0;
-    OPENSSL_free(p);
+    if (p != NULL)
+        OPENSSL_free(p);
 end:
 #ifndef ALLOW_VLA
     OPENSSL_free(keybuf);
