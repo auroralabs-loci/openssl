@@ -486,7 +486,7 @@ int ossl_provider_up_ref(OSSL_PROVIDER *prov)
 {
     int ref = 0;
 
-    if (CRYPTO_UP_REF(&prov->refcnt, &ref) <= 0)
+    if (!CRYPTO_UP_REF(&prov->refcnt, &ref))
         return 0;
 
 #ifndef FIPS_MODULE
@@ -1134,7 +1134,7 @@ static int provider_init(OSSL_PROVIDER *prov)
         prov->error_strings[0].error = ERR_PACK(prov->error_lib, 0, 0);
         prov->error_strings[0].string = prov->name;
         /*
-         * Copy reasonstrings item 0..cnt-1 to prov->error_trings positions
+         * Copy reasonstrings item 0..cnt-1 to prov->error_strings positions
          * 1..cnt.
          */
         for (cnt2 = 1; cnt2 <= cnt; cnt2++) {
@@ -1576,7 +1576,7 @@ int ossl_provider_doall_activated(OSSL_LIB_CTX *ctx,
              * to avoid upping the ref count on the parent provider, which we
              * must not do while holding locks.
              */
-            if (CRYPTO_UP_REF(&prov->refcnt, &ref) <= 0) {
+            if (!CRYPTO_UP_REF(&prov->refcnt, &ref)) {
                 CRYPTO_THREAD_unlock(prov->flag_lock);
                 goto err_unlock;
             }

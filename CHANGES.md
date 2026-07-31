@@ -31,6 +31,67 @@ OpenSSL Releases
 
 ### Changes between 4.0 and 4.1 [xx XXX xxxx]
 
+ * Added `CMS_add_standard_smimecap_ex()`, which populates an SMIMECapabilities
+   list using `EVP_CIPHER_fetch()` and `EVP_MD_fetch()` so that only algorithms
+   available in the active providers are advertised.  `PKCS7_sign_add_signer()`
+   was updated in the same way, so that legacy ciphers such as RC2 and DES are
+   no longer included in SMIMECapabilities by default when only the default
+   provider is loaded.
+
+   *Todd Short*
+
+ * Fixed TLS 1.3 external PSK connections being wrongly rejected when
+   the client sets a non-empty session ID context.
+
+   *Viktor Dukhovni*
+
+ * Fixed a TLS 1.3 server with no session ID context to accept external PSK
+   connections and to stop issuing unusable session tickets.
+
+   *Viktor Dukhovni*
+
+ * Added AVX512 optimized SHAKE x4 operations for ML-DSA on `x86_64`.
+
+   *Marcel Cornu and Tomasz Kantecki*
+
+ * EC key point format simplification.
+
+   The point conversion form (compressed, uncompressed, or hybrid)
+   is now a single value on the `EC_GROUP` and round-trips
+   unchanged through import and export of `EC_KEY` objects.
+
+   Freshly generated keys have their public point encoded in
+   uncompressed form.  A `point-format` supplied at key generation
+   time via `OSSL_PKEY_PARAM_EC_POINT_CONVERSION_FORMAT` is
+   validated (an invalid value is rejected) but otherwise ignored
+   on the generated key.  EC parameter generation continues to
+   honour the requested form on the group's generator; imported
+   keys keep their form.
+
+   The `ec_point_formats` extension no longer affects TLS 1.2
+   X.509 certificate selection or acceptance.  OpenSSL now
+   accepts an EC certificate in any point form it can decode,
+   and sends any EC certificate it has regardless of point form.
+   TLS 1.3 disregards the extension entirely.
+
+   The RFC 4492/8422 section 5.1.2 requirement that the peer's
+   point-format list contain "uncompressed" is now enforced on
+   both sides (previously client-only), and only when an ECC
+   TLS 1.2 ciphersuite is negotiated -- a missing "uncompressed"
+   is ignored under TLS 1.3 or with a non-ECC cipher.
+
+   *Viktor Dukhovni*
+
+ * Added unit tests setup activated via `enable-unit-tests` option. This works
+   only on platforms with ld `--wrap` support (Linux, BSD).
+
+   *Jakub Zelenka*
+
+ * Deprecated the `enable-unit-test` configure option and the
+   `SSL_test_functions()` function. Both will be removed in OpenSSL 5.0.
+
+   *Jakub Zelenka*
+
  * Added -testmode option for `s_time` app.
 
    *Jakub Zelenka*
@@ -41,7 +102,7 @@ OpenSSL Releases
    *Adriano Sela Aviles*
 
  * SubjectPublicKeyInfo blobs whose AlgorithmIdentifier uses id-RSAES-OAEP
-   (NID_rsaesOaep, 1.2.840.113549.1.1.7) with a plain RSAPublicKey body
+   (`NID_rsaesOaep`, 1.2.840.113549.1.1.7) with a plain RSAPublicKey body
    are now decoded as RSA keys.  This is required for interoperability
    with TPM 1.2 Endorsement Key certificates per TCG Credential Profiles
    V1.2 section 3.2.7.  The OAEP AlgorithmIdentifier parameters are not
@@ -64,6 +125,17 @@ OpenSSL Releases
 
    *Jakub Zelenka*
 
+ * Windows-on-Itanium (VC-WIN64I) support was dropped - the Itanium
+   architecture has been discontinued and the platform is no longer
+   supported or tested.
+
+   *Bob Beck*
+
+ * Windows CE support was dropped - Windows CE has been unsupported since
+   2018 and does not have a modern C99 toolchain.
+
+   *Bob Beck*
+
  * Improved DTLS handshake robustness under UDP reordering by buffering and
    replaying early ChangeCipherSpec (CCS) records at the expected state.
 
@@ -77,6 +149,14 @@ OpenSSL Releases
    future use of more modern tooling.
 
    *Bob Beck*
+
+ *  `ASN1_STRING_set()` and `ASN1_STRING_length()` have been
+    deprecated. The replacement functions `ASN1_STRING_set_data()` or
+    `ASN1_STRING_set_string()`, and `ASN1_STRING_length_ex()` should be
+    used in their place. This prepares the ASN1_STRING type to support
+    modern size_t length values in the future.
+
+    *Bob Beck*
 
  * `EVP_CIPHER_CTX_get_num()` and `EVP_CIPHER_CTX_set_num()' have been deprecated.
 
@@ -118,6 +198,12 @@ OpenSSL Releases
    for which ownership is not taken by the created ASN1_STRING object.
 
    *Bob Beck*
+
+ * Fixed X.509 verification of certificate chains that use DSA signatures
+   with SHA-384 or SHA-512 by registering `dsa_with_SHA384` and
+   `dsa_with_SHA512` in the signature-algorithm cross-reference table.
+
+   *John Claus*
 
  * Added AVX2 optimized ML-DSA NTT operations on `x86_64`.
 
@@ -193,6 +279,11 @@ OpenSSL Releases
    (or other architectures with 128 bit vector registers).
 
    *Timo Keller*
+
+ * Added `EVP_KDF_CTX_get0_kdf()` and `EVP_KDF_CTX_get1_kdf()` functions
+   as a replacement for the now deprecated `EVP_KDF_CTX_kdf()`.
+
+   *Leon Timmermans*
 
  * Add `FIPS_mode()` as a convenience define to
    `EVP_default_properties_is_fips_enabled(NULL)`, which is
@@ -1268,7 +1359,9 @@ OpenSSL 4.0
    *Tomáš Mráz*
 
  * Removed deprecated functions `ERR_get_state()`, `ERR_remove_state()`
-   and `ERR_remove_thread_state()`. The `ERR_STATE` object is now always opaque.
+   and `ERR_remove_thread_state()`, as well as the `ERR_FLAG_MARK`,
+   `ERR_FLAG_CLEAR` and `ERR_NUM_ERRORS` macros. The `ERR_STATE` object is now
+   always opaque.
    <!-- https://github.com/openssl/openssl/pull/30005 -->
 
    *Tomáš Mráz*
@@ -4091,7 +4184,7 @@ breaking changes, and mappings for the large list of deprecated functions.
 
  * Fixed a bug in the function `OCSP_basic_verify` that verifies the signer
    certificate on an OCSP response. The bug caused the function in the case
-   where the (non-default) flag OCSP_NOCHECKS is used to return a postivie
+   where the (non-default) flag OCSP_NOCHECKS is used to return a positive
    response (meaning a successful verification) even in the case where the
    response signing certificate fails to verify.
 
@@ -19889,7 +19982,7 @@ s-cbc           3624.96k     5258.21k     5530.91k     5624.30k     5628.26k
    The new configuration file reading functions are:
 
            NCONF_new, NCONF_free, NCONF_load, NCONF_load_fp, NCONF_load_bio,
-           NCONF_get_section, NCONF_get_string, NCONF_get_numbre
+           NCONF_get_section, NCONF_get_string, NCONF_get_number
 
            NCONF_default, NCONF_WIN32
 
