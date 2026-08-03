@@ -52,7 +52,17 @@ key() {
         case $alg in
         rsa) args=("${args[@]}" -pkeyopt rsa_keygen_bits:$bits );;
         ec)  args=("${args[@]}" -pkeyopt "ec_paramgen_curve:$bits")
-               args=("${args[@]}" -pkeyopt ec_param_enc:named_curve);;
+               args=("${args[@]}" -pkeyopt ec_param_enc:named_curve)
+               # OPENSSL_EC_POINT_FORMAT (uncompressed|compressed|hybrid) drives
+               # the per-key point conversion form recorded on the generated
+               # EC_KEY, surfaced in SubjectPublicKeyInfo and negotiated via the
+               # TLS 1.2 ec_point_formats extension.  Empty/unset preserves the
+               # provider default (uncompressed).
+               if [ -n "$OPENSSL_EC_POINT_FORMAT" ]; then
+                   args=("${args[@]}" \
+                       -pkeyopt "point-format:$OPENSSL_EC_POINT_FORMAT")
+               fi
+               ;;
         dsa)  args=(-paramfile "$bits");;
         ed25519)  ;;
         ed448)  ;;
