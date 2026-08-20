@@ -80,15 +80,24 @@ static int test_loaded_provider(void)
 }
 
 #ifndef OPENSSL_NO_AUTOLOAD_CONFIG
-static int test_configured_provider(void)
+static int test_active_provider(void)
 {
-    const char *name = "p_test_configured";
+    const char *name = "p_test_active";
     OSSL_PROVIDER *prov = NULL;
     /* This MUST match the config file */
     const char *expected_greeting = "Hello OpenSSL, greetings from Test Provider";
 
     return TEST_ptr(prov = ossl_provider_find(NULL, name, 0))
         && test_provider(prov, expected_greeting);
+}
+
+static int test_passive_provider(void)
+{
+    const char *name = "p_test_passive";
+    OSSL_PROVIDER *prov = NULL;
+
+    return TEST_ptr(prov = ossl_provider_new(NULL, name, NULL, NULL, 0))
+        && test_provider(prov, expected_greeting1(name));
 }
 #endif
 #endif
@@ -136,7 +145,8 @@ int setup_tests(void)
 #ifndef NO_PROVIDER_MODULE
     ADD_TEST(test_loaded_provider);
 #ifndef OPENSSL_NO_AUTOLOAD_CONFIG
-    ADD_TEST(test_configured_provider);
+    ADD_TEST(test_active_provider);
+    ADD_TEST(test_passive_provider);
 #endif
 #endif
     ADD_TEST(test_cache_flushes);
