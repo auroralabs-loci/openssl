@@ -2899,6 +2899,18 @@ static int queue_incoming_connection(SSL *qlistener, SSL *clientssl)
     return TEST_size_t_eq(SSL_get_accept_connection_queue_len(qlistener), 1);
 }
 
+static int listen_ex_rejects_new_conn(SSL *qlistener, SSL *new_conn)
+{
+    int ret = SSL_listen_ex(qlistener, new_conn);
+    unsigned long err = ERR_get_error();
+    int ok = TEST_int_eq(ret, -1)
+        && TEST_int_eq(ERR_GET_REASON(err), ERR_R_PASSED_INVALID_ARGUMENT)
+        && TEST_size_t_eq(SSL_get_accept_connection_queue_len(qlistener), 1);
+
+    ERR_clear_error();
+    return ok;
+}
+
 static int test_ssl_client_as_ossl_quic_method(void)
 {
     SSL_CTX *cctx = NULL, *sctx = NULL;
@@ -2969,7 +2981,9 @@ static int test_ssl_listen_ex(int idx)
 {
     SSL_CTX *cctx = NULL, *sctx = NULL, *qmctx = NULL;
     SSL *clientssl = NULL, *serverssl = NULL, *qlistener = NULL;
+    SSL *preconf = NULL, *prestream = NULL;
     SSL *cstream = NULL, *sstream = NULL;
+    BIO *confbio = NULL;
     unsigned char buf[16], msg[] = "Hello, World!";
     size_t readbytes, written;
     int testresult = 0;
@@ -3002,9 +3016,44 @@ static int test_ssl_listen_ex(int idx)
     if (!TEST_ptr(serverssl))
         goto err;
 
-    if (!TEST_int_eq(SSL_listen_ex(qlistener, serverssl), 0)
+    if ((idx == 0
+            && (!TEST_int_eq(SSL_listen_ex(NULL, serverssl), -1)
+                || !TEST_true(ERR_GET_REASON(ERR_get_error())
+                    == ERR_R_PASSED_INVALID_ARGUMENT)))
+        || !TEST_int_eq(SSL_listen_ex(qlistener, serverssl), 0)
         || !queue_incoming_connection(qlistener, clientssl))
         goto err;
+    ERR_clear_error();
+
+    /* A connection which has already been started is not fresh. */
+    if (!listen_ex_rejects_new_conn(qlistener, clientssl))
+        goto err;
+
+    /* Network BIOs may not already be attached. */
+    preconf = SSL_new(qmctx);
+    if (!TEST_ptr(preconf)
+        || !TEST_ptr(confbio = BIO_new(BIO_s_mem())))
+        goto err;
+    SSL_set_bio(preconf, confbio, confbio);
+    confbio = NULL;
+    if (!listen_ex_rejects_new_conn(qlistener, preconf))
+        goto err;
+
+    SSL_free(preconf);
+    preconf = NULL;
+
+    /* Streams may not already have been created. */
+    preconf = SSL_new(qmctx);
+    if (!TEST_ptr(preconf)
+        || !TEST_ptr(prestream = SSL_new_stream(preconf,
+                         SSL_STREAM_FLAG_ADVANCE))
+        || !listen_ex_rejects_new_conn(qlistener, preconf))
+        goto err;
+
+    SSL_free(prestream);
+    prestream = NULL;
+    SSL_free(preconf);
+    preconf = NULL;
 
     if (!TEST_int_eq(SSL_listen_ex(qlistener, serverssl), 1)
         || !TEST_size_t_eq(SSL_get_accept_connection_queue_len(qlistener), 0))
@@ -3064,6 +3113,9 @@ static int test_ssl_listen_ex(int idx)
 err:
     SSL_free(sstream);
     SSL_free(cstream);
+    SSL_free(prestream);
+    SSL_free(preconf);
+    BIO_free(confbio);
     SSL_free(qlistener);
     SSL_free(serverssl);
     SSL_free(clientssl);
@@ -3096,6 +3148,53 @@ static int test_ssl_listen_ex_teardown(void)
     testresult = 1;
 
 err:
+    SSL_free(qlistener);
+    SSL_free(serverssl);
+    SSL_free(clientssl);
+    SSL_CTX_free(sctx);
+    SSL_CTX_free(cctx);
+    SSL_CTX_free(qmctx);
+    return testresult;
+}
+
+/* Internal failures are errors and must not consume the queued channel. */
+static int test_ssl_listen_ex_mfail(void)
+{
+    SSL_CTX *cctx = NULL, *sctx = NULL, *qmctx = NULL;
+    SSL *clientssl = NULL, *serverssl = NULL, *qlistener = NULL;
+    int testresult = 0, ret;
+
+    if (!TEST_ptr(sctx = create_server_ctx())
+        || !TEST_ptr(cctx = create_client_ctx())
+        || !create_quic_ssl_objects_ex(sctx, cctx,
+            &qlistener, &clientssl, 1)
+        || !TEST_ptr(qmctx = SSL_CTX_new_ex(libctx, NULL, OSSL_QUIC_method()))
+        || !TEST_ptr(serverssl = SSL_new(qmctx))
+        || !TEST_int_eq(SSL_listen_ex(qlistener, serverssl), 0)
+        || !queue_incoming_connection(qlistener, clientssl))
+        goto err;
+
+    MFAIL_start();
+    ret = SSL_listen_ex(qlistener, serverssl);
+    MFAIL_end();
+    ERR_clear_error();
+
+    if (mfail_was_triggered()) {
+        if (!TEST_int_eq(ret, -1)
+            || !TEST_size_t_eq(SSL_get_accept_connection_queue_len(qlistener), 1)) {
+            /* ADD_MFAIL_NO_CHECK_TEST treats -1 as an unconditional failure. */
+            testresult = -1;
+            goto err;
+        }
+    } else if (!TEST_int_eq(ret, 1)
+        || !TEST_size_t_eq(SSL_get_accept_connection_queue_len(qlistener), 0)) {
+        goto err;
+    }
+
+    testresult = 1;
+
+err:
+    MFAIL_end();
     SSL_free(qlistener);
     SSL_free(serverssl);
     SSL_free(clientssl);
@@ -4140,6 +4239,7 @@ int setup_tests(void)
     ADD_TEST(test_bio_ssl);
     ADD_ALL_TESTS(test_ssl_listen_ex, 2);
     ADD_TEST(test_ssl_listen_ex_teardown);
+    ADD_MFAIL_NO_CHECK_TEST(test_ssl_listen_ex_mfail);
     ADD_TEST(test_ssl_client_as_ossl_quic_method);
     ADD_TEST(test_back_pressure);
     ADD_TEST(test_multiple_dgrams);
