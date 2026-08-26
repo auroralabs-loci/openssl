@@ -270,6 +270,10 @@ static int cms_kek_cipher(unsigned char **pout, size_t *poutlen,
         ERR_raise(ERR_LIB_CMS, CMS_R_INVALID_KEY_LENGTH);
         return 0;
     }
+    if (inlen > INT_MAX) {
+        ERR_raise(ERR_LIB_CMS, ERR_R_INTERNAL_ERROR);
+        return 0;
+    }
 
     if (inlen > INT_MAX)
         return 0;
@@ -349,6 +353,10 @@ int ossl_cms_RecipientInfo_kemri_encrypt(const CMS_ContentInfo *cms,
     if (EVP_PKEY_encapsulate(kemri->pctx, kem_ct, &kem_ct_len, kem_secret, &kem_secret_len) <= 0)
         goto err;
 
+    if (kem_ct_len > INT_MAX) {
+        ERR_raise(ERR_LIB_CMS, ERR_R_INTERNAL_ERROR);
+        goto err;
+    }
     ASN1_STRING_set0(kemri->kemct, kem_ct, (int)kem_ct_len);
     kem_ct = NULL;
 
