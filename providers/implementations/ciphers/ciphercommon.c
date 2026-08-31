@@ -135,9 +135,23 @@ int ossl_cipher_var_keylen_set_ctx_params(void *vctx, const OSSL_PARAM params[])
     PROV_CIPHER_CTX *ctx = (PROV_CIPHER_CTX *)vctx;
     struct ossl_cipher_set_ctx_param_list_st p;
 
-    if (ctx == NULL || !cipher_var_keylen_set_ctx_params_decoder(params, &p))
+    if (ctx == NULL
+        || !cipher_var_keylen_set_ctx_params_decoder(params, &p)
+        || !ossl_cipher_common_set_ctx_params(ctx, &p))
         return 0;
-    return ossl_cipher_common_set_ctx_params(ctx, &p);
+
+    if (p->keylen != NULL) {
+        size_t keylen;
+
+        if (!OSSL_PARAM_get_size_t(p->keylen, &keylen)) {
+            ERR_raise(ERR_LIB_PROV, PROV_R_FAILED_TO_GET_PARAMETER);
+            return 0;
+        }
+        if (ctx->keylen != keylen) {
+            ctx->keylen = keylen;
+            ctx->key_set = 0;
+        }
+    }
 }
 
 void ossl_cipher_generic_reset_ctx(PROV_CIPHER_CTX *ctx)
@@ -669,19 +683,6 @@ int ossl_cipher_common_set_ctx_params(PROV_CIPHER_CTX *ctx, const struct ossl_ci
             return 0;
         }
         ctx->num = num;
-    }
-
-    if (p->keylen != NULL) {
-        size_t keylen;
-
-        if (!OSSL_PARAM_get_size_t(p->keylen, &keylen)) {
-            ERR_raise(ERR_LIB_PROV, PROV_R_FAILED_TO_GET_PARAMETER);
-            return 0;
-        }
-        if (ctx->keylen != keylen) {
-            ctx->keylen = keylen;
-            ctx->key_set = 0;
-        }
     }
     return 1;
 }
