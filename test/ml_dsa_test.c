@@ -355,6 +355,29 @@ err:
     return ret;
 }
 
+static int ml_dsa_newdata_bad_propq_test(void)
+{
+    int ret = 0;
+    EVP_KEYMGMT *keymgmt = NULL;
+    void *keydata = NULL;
+    OSSL_PARAM params[2];
+
+    params[0] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_PROPERTIES,
+        "provider=fail", 0);
+    params[1] = OSSL_PARAM_construct_end();
+
+    if (!TEST_ptr(keymgmt = EVP_KEYMGMT_fetch(lib_ctx, "ML-DSA-44", NULL)))
+        goto end;
+
+    if (!TEST_ptr_null(keydata = evp_keymgmt_newdata(keymgmt, params)))
+        goto end;
+
+    ret = 1;
+end:
+    EVP_KEYMGMT_free(keymgmt);
+    return ret;
+}
+
 static int from_data_invalid_public_test(void)
 {
     int ret = 0;
@@ -797,6 +820,7 @@ int setup_tests(void)
     ADD_TEST(from_data_bad_input_test);
     ADD_TEST(ml_dsa_digest_sign_verify_test);
     ADD_TEST(ml_dsa_priv_pub_bad_t0_test);
+    ADD_TEST(ml_dsa_newdata_bad_propq_test);
 
     /*
      * Tested only in the default configuration, with a non-default provider
