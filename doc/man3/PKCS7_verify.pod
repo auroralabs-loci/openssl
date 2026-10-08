@@ -59,6 +59,23 @@ PKCS7_dataVerify() is available for backwards compatibility with older versions
 of OpenSSL, but it is generally recommended that users use the PKCS7_verify()
 API instead, as it offers greater flexibility in the verification process.
 
+PKCS7_dataVerify() operates in a similar fashion to PKCS7_verify, with a few
+notable exceptions:
+
+=over 4
+
+=item PKCS7_dataVerify does not support the passing of the I<flags> parameter.
+
+=item PKCS7_dataVerify obtains its signer info from the passed in signer data
+via the I<si> parameter, rather than parsing the signers from the PKCS7 object
+directly.
+
+=back
+
+PKCS7_dataVerify() is available for backwards compatibility with older versions
+of OpenSSL, but it is generally recommended that users use the PKCS7_verify()
+API instead, as it offers greater flexibility in the verification process.
+
 =head1 VERIFY PROCESS
 
 Normally the verify process proceeds as follows.
