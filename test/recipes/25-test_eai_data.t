@@ -21,7 +21,7 @@ setup("test_eai_data");
 #./util/wrap.pl apps/openssl verify -nameopt utf8 -no_check_time -CAfile test/recipes/25-test_eai_data/utf8_chain.pem test/recipes/25-test_eai_data/ascii_leaf.pem
 #./util/wrap.pl apps/openssl verify -nameopt utf8 -no_check_time -CAfile test/recipes/25-test_eai_data/ascii_chain.pem test/recipes/25-test_eai_data/utf8_leaf.pem
 
-plan tests => 16;
+plan tests => 19;
 
 require_ok(srctop_file('test','recipes','tconversion.pl'));
 my $folder = "test/recipes/25-test_eai_data";
@@ -69,6 +69,27 @@ ok(run(app(["openssl", "verify", "-nameopt", "utf8", "-no_check_time", "-verify_
 ok(run(app(["openssl", "verify", "-nameopt", "utf8", "-no_check_time", "-verify_email", 'joe@example.com', "-CAfile", $kdc_chain_pem,  $kdc_pem])));
 # We expect SmtpUTF8Mailbox to be a UTF8 String, not an IA5String.
 ok(!run(app(["openssl", "verify", "-nameopt", "utf8", "-no_check_time", "-verify_email", 'moe@example.com', "-CAfile", $kdc_chain_pem,  $kdc_pem])));
+
+# Test EAI name constraints: leading-dot base with SmtpUTF8Mailbox
+ok(run(app(["openssl", "verify", "-no_check_time",
+            "-CAfile", srctop_file($folder, "nc-eai-dotbase-root.pem"),
+            "-partial_chain",
+            srctop_file($folder, "nc-eai-dotbase-leaf.pem")])),
+   "EAI name constraint with leading-dot base matches subdomain");
+
+# Test EAI name constraints: full email base with SmtpUTF8Mailbox
+ok(run(app(["openssl", "verify", "-no_check_time",
+            "-CAfile", srctop_file($folder, "nc-eai-atbase-root.pem"),
+            "-partial_chain",
+            srctop_file($folder, "nc-eai-atbase-leaf.pem")])),
+   "EAI name constraint with full email base matches exactly");
+
+# Negative test: wrong local part against full email name constraint
+ok(!run(app(["openssl", "verify", "-no_check_time",
+             "-CAfile", srctop_file($folder, "nc-eai-atbase-root.pem"),
+             "-partial_chain",
+             srctop_file($folder, "nc-eai-atbase-wrong-leaf.pem")])),
+   "EAI name constraint with full email base rejects wrong local part");
 
 #Check that we get the expected failure return code
 with({ exit_checker => sub { return shift == 2; } },
